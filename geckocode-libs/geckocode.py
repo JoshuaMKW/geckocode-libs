@@ -549,18 +549,18 @@ class GeckoCode(object):
 class Write8(GeckoCode):
     def __init__(self, value: Union[int, bytes], repeat: int = 0, address: int = 0, isPointer: bool = False):
         self.value = value
-        self.address = address
-        self.repeat = repeat
-        self.isPointer = isPointer
+        self._address = address
+        self._repeat = repeat
+        self._isPointer = isPointer
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        addrstr = "pointer address" if self.isPointer else "base address"
-        if self.repeat > 0:
-            return f"({intType:02X}) Write byte 0x{self.value:02X} to (0x{self.address:08X} + the {addrstr}) {self.repeat + 1} times consecutively"
+            0x10 if self._isPointer else 0)
+        addrstr = "pointer address" if self._isPointer else "base address"
+        if self._repeat > 0:
+            return f"({intType:02X}) Write byte 0x{self.value:02X} to (0x{self._address:08X} + the {addrstr}) {self._repeat + 1} times consecutively"
         else:
-            return f"({intType:02X}) Write byte 0x{self.value:02X} to 0x{self.address:08X} + the {addrstr}"
+            return f"({intType:02X}) Write byte 0x{self.value:02X} to 0x{self._address:08X} + the {addrstr}"
 
     def __len__(self) -> int:
         return 8
@@ -599,10 +599,10 @@ class Write8(GeckoCode):
         return 1
 
     def apply(self, dol: DolFile) -> bool:
-        addr = self.address | 0x80000000
+        addr = self._address | 0x80000000
         if dol.is_mapped(addr):
             dol.seek(addr)
-            counter = self.repeat
+            counter = self._repeat
             while counter + 1 > 0:
                 dol.write(self.value.to_bytes(1, "big", signed=False))
                 counter -= 1
@@ -611,30 +611,30 @@ class Write8(GeckoCode):
 
     def as_bytes(self) -> bytes:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        metadata = (intType << 24) | self.address
-        info = (self.repeat << 16) | self.value
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | self._address
+        info = (self._repeat << 16) | self.value
         return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False)
 
 
 class Write16(GeckoCode):
     def __init__(self, value: Union[int, bytes], repeat: int = 0, address: int = 0, isPointer: bool = False):
         self.value = value
-        self.address = address
-        self.repeat = repeat
-        self.isPointer = isPointer
+        self._address = address
+        self._repeat = repeat
+        self._isPointer = isPointer
 
     def __len__(self) -> int:
         return 8
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        addrstr = "pointer address" if self.isPointer else "base address"
-        if self.repeat > 0:
-            return f"({intType:02X}) Write short 0x{self.value:04X} to (0x{self.address:08X} + the {addrstr}) {self.repeat + 1} times consecutively"
+            0x10 if self._isPointer else 0)
+        addrstr = "pointer address" if self._isPointer else "base address"
+        if self._repeat > 0:
+            return f"({intType:02X}) Write short 0x{self.value:04X} to (0x{self._address:08X} + the {addrstr}) {self._repeat + 1} times consecutively"
         else:
-            return f"({intType:02X}) Write short 0x{self.value:04X} to 0x{self.address:08X} + the {addrstr}"
+            return f"({intType:02X}) Write short 0x{self.value:04X} to 0x{self._address:08X} + the {addrstr}"
 
     def __getitem__(self, index: int) -> int:
         if index != 0:
@@ -670,10 +670,10 @@ class Write16(GeckoCode):
         return 1
 
     def apply(self, dol: DolFile) -> bool:
-        addr = self.address | 0x80000000
+        addr = self._address | 0x80000000
         if dol.is_mapped(addr):
             dol.seek(addr)
-            counter = self.repeat
+            counter = self._repeat
             while counter + 1 > 0:
                 dol.write(self.value.to_bytes(2, "big", signed=False))
                 counter -= 1
@@ -682,26 +682,26 @@ class Write16(GeckoCode):
 
     def as_bytes(self) -> bytes:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        metadata = (intType << 24) | self.address
-        info = (self.repeat << 16) | self.value
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | self._address
+        info = (self._repeat << 16) | self.value
         return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False)
 
 
 class Write32(GeckoCode):
     def __init__(self, value: Union[int, bytes], address: int = 0, isPointer: bool = False):
         self.value = value
-        self.address = address
-        self.isPointer = isPointer
+        self._address = address
+        self._isPointer = isPointer
 
     def __len__(self) -> int:
         return 8
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        addrstr = "pointer address" if self.isPointer else "base address"
-        return f"({intType:02X}) Write word 0x{self.value:08X} to 0x{self.address:08X} + the {addrstr}"
+            0x10 if self._isPointer else 0)
+        addrstr = "pointer address" if self._isPointer else "base address"
+        return f"({intType:02X}) Write word 0x{self.value:08X} to 0x{self._address:08X} + the {addrstr}"
 
     def __getitem__(self, index: int) -> int:
         if index != 0:
@@ -737,7 +737,7 @@ class Write32(GeckoCode):
         return 1
 
     def apply(self, dol: DolFile) -> bool:
-        addr = self.address | 0x80000000
+        addr = self._address | 0x80000000
         if dol.is_mapped(addr):
             dol.seek(addr)
             dol.write(self.value.to_bytes(4, "big", signed=False))
@@ -746,8 +746,8 @@ class Write32(GeckoCode):
 
     def as_bytes(self) -> bytes:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        metadata = (intType << 24) | self.address
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | self._address
         info = self.value
         return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False)
 
@@ -755,17 +755,17 @@ class Write32(GeckoCode):
 class WriteString(GeckoCode):
     def __init__(self, value: bytes, address: int = 0, isPointer: bool = False):
         self.value = value
-        self.address = address
-        self.isPointer = isPointer
+        self._address = address
+        self._isPointer = isPointer
 
     def __len__(self) -> int:
         return 8 + len(self.value)
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        addrstr = "pointer address" if self.isPointer else "base address"
-        return f"({intType:02X}) Write {len(self) - 8} bytes to 0x{self.address:08X} + the {addrstr}"
+            0x10 if self._isPointer else 0)
+        addrstr = "pointer address" if self._isPointer else "base address"
+        return f"({intType:02X}) Write {len(self) - 8} bytes to 0x{self._address:08X} + the {addrstr}"
 
     def __getitem__(self, index: int) -> bytes:
         return self.value[index]
@@ -792,7 +792,7 @@ class WriteString(GeckoCode):
         return ((len(self) + 7) & -0x8) >> 3
 
     def apply(self, dol: DolFile) -> bool:
-        addr = self.address | 0x80000000
+        addr = self._address | 0x80000000
         if dol.is_mapped(addr):
             dol.seek(addr)
             dol.write(self.value)
@@ -801,8 +801,8 @@ class WriteString(GeckoCode):
 
     def as_bytes(self) -> bytes:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        metadata = (intType << 24) | self.address
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | self._address
         info = len(self.value)
         return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False) + _align_bytes(self.value, alignment=8)
 
@@ -812,34 +812,34 @@ class WriteSerial(GeckoCode):
                  valueSize: int = 2, addrInc: int = 4, valueInc: int = 0):
         self.value = value
         self.valueInc = valueInc
-        self.valueSize = valueSize
-        self.address = address
-        self.addressInc = addrInc
-        self.repeat = repeat
-        self.isPointer = isPointer
+        self._valueSize = valueSize
+        self._address = address
+        self._addressInc = addrInc
+        self._repeat = repeat
+        self._isPointer = isPointer
 
     def __len__(self) -> int:
         return 16
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        addrstr = "pointer address" if self.isPointer else "base address"
-        valueType = ("byte", "short", "word")[self.valueSize]
-        if self.repeat > 0:
-            mapping = f"incrementing the value by {self.valueInc} and the address by {self.addressInc} each iteration"
-            return f"({intType:02X}) Write {valueType} 0x{self.value:08X} to (0x{self.address:08X} + the {addrstr}) {self.repeat + 1} times consecutively, {mapping}"
+            0x10 if self._isPointer else 0)
+        addrstr = "pointer address" if self._isPointer else "base address"
+        valueType = ("byte", "short", "word")[self._valueSize]
+        if self._repeat > 0:
+            mapping = f"incrementing the value by {self.valueInc} and the address by {self._addressInc} each iteration"
+            return f"({intType:02X}) Write {valueType} 0x{self.value:08X} to (0x{self._address:08X} + the {addrstr}) {self._repeat + 1} times consecutively, {mapping}"
         else:
-            return f"({intType:02X}) Write {valueType} 0x{self.value:08X} to 0x{self.address:08X} + the {addrstr})"
+            return f"({intType:02X}) Write {valueType} 0x{self.value:08X} to 0x{self._address:08X} + the {addrstr})"
 
     def __getitem__(self, index: int) -> Tuple[int, int]:
-        if index >= self.repeat:
+        if index >= self._repeat:
             raise IndexError(
                 f"Index [{index}] is beyond the virtual code size")
         elif index < 0:
-            index += self.repeat
+            index += self._repeat
 
-        return (self.address + self.addressInc*index,
+        return (self._address + self._addressInc*index,
                 self.value + self.valueInc*index)
 
     def __setitem__(self, index: int, value: Any):
@@ -870,7 +870,7 @@ class WriteSerial(GeckoCode):
         return 2
 
     def apply(self, dol: DolFile) -> bool:
-        addr = self.address | 0x80000000
+        addr = self._address | 0x80000000
         if dol.is_mapped(addr):
             for addr, value in self:
                 dol.seek(addr)
@@ -880,11 +880,11 @@ class WriteSerial(GeckoCode):
 
     def as_bytes(self) -> bytes:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        metadata = (intType << 24) | self.address
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | self._address
         info = self.value
-        subinfo = (self.valueSize << 28) | (
-            self.repeat << 16) | (self.addressInc)
+        subinfo = (self._valueSize << 28) | (
+            self._repeat << 16) | (self._addressInc)
         valueInc = self.valueInc
         return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False) + subinfo.to_bytes(4, "big", signed=False) + valueInc.to_bytes(4, "big", signed=False)
 
@@ -893,9 +893,9 @@ class IfEqual32(GeckoCode):
     def __init__(self, value: Union[int, bytes], address: int = 0, isPointer: bool = False,
                  endif: bool = False):
         self.value = value
-        self.address = address
-        self.endif = endif
-        self.isPointer = isPointer
+        self._address = address
+        self._endif = endif
+        self._isPointer = isPointer
         self._children = []
 
     def __len__(self) -> int:
@@ -903,10 +903,10 @@ class IfEqual32(GeckoCode):
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        addrstr = "pointer address" if self.isPointer else "base address"
-        endif = "(Apply Endif) " if self.endif else ""
-        return f"({intType:02X}) {endif}If the word at address (0x{self.address:08X} + the {addrstr}) is equal to 0x{self.value:08X}, run the encapsulated codes"
+            0x10 if self._isPointer else 0)
+        addrstr = "pointer address" if self._isPointer else "base address"
+        endif = "(Apply Endif) " if self._endif else ""
+        return f"({intType:02X}) {endif}If the word at address (0x{self._address:08X} + the {addrstr}) is equal to 0x{self.value:08X}, run the encapsulated codes"
 
     def __getitem__(self, index: int) -> GeckoCode:
         return self._children[index]
@@ -954,8 +954,8 @@ class IfEqual32(GeckoCode):
 
     def as_bytes(self) -> bytes:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        metadata = (intType << 24) | self.address | (1 if self.endif else 0)
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | self._address | (1 if self._endif else 0)
         info = self.value
         body = b""
         for code in self:
@@ -967,9 +967,9 @@ class IfNotEqual32(GeckoCode):
     def __init__(self, value: Union[int, bytes], address: int = 0, isPointer: bool = False,
                  endif: bool = False):
         self.value = value
-        self.address = address
-        self.endif = endif
-        self.isPointer = isPointer
+        self._address = address
+        self._endif = endif
+        self._isPointer = isPointer
         self._children = []
 
     def __len__(self) -> int:
@@ -977,10 +977,10 @@ class IfNotEqual32(GeckoCode):
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        addrstr = "pointer address" if self.isPointer else "base address"
-        endif = "(Apply Endif) " if self.endif else ""
-        return f"({intType:02X}) {endif}If the word at address (0x{self.address:08X} + the {addrstr}) is not equal to 0x{self.value:08X}, run the encapsulated codes"
+            0x10 if self._isPointer else 0)
+        addrstr = "pointer address" if self._isPointer else "base address"
+        endif = "(Apply Endif) " if self._endif else ""
+        return f"({intType:02X}) {endif}If the word at address (0x{self._address:08X} + the {addrstr}) is not equal to 0x{self.value:08X}, run the encapsulated codes"
 
     def __getitem__(self, index: int) -> GeckoCode:
         return self._children[index]
@@ -1028,8 +1028,8 @@ class IfNotEqual32(GeckoCode):
 
     def as_bytes(self) -> bytes:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        metadata = (intType << 24) | self.address | (1 if self.endif else 0)
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | self._address | (1 if self._endif else 0)
         info = self.value
         body = b""
         for code in self:
@@ -1041,9 +1041,9 @@ class IfGreaterThan32(GeckoCode):
     def __init__(self, value: Union[int, bytes], address: int = 0, isPointer: bool = False,
                  endif: bool = False):
         self.value = value
-        self.address = address
-        self.endif = endif
-        self.isPointer = isPointer
+        self._address = address
+        self._endif = endif
+        self._isPointer = isPointer
         self._children = []
 
     def __len__(self) -> int:
@@ -1051,10 +1051,10 @@ class IfGreaterThan32(GeckoCode):
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        addrstr = "pointer address" if self.isPointer else "base address"
-        endif = "(Apply Endif) " if self.endif else ""
-        return f"({intType:02X}) {endif}If the word at address (0x{self.address:08X} + the {addrstr}) is greater than 0x{self.value:08X}, run the encapsulated codes"
+            0x10 if self._isPointer else 0)
+        addrstr = "pointer address" if self._isPointer else "base address"
+        endif = "(Apply Endif) " if self._endif else ""
+        return f"({intType:02X}) {endif}If the word at address (0x{self._address:08X} + the {addrstr}) is greater than 0x{self.value:08X}, run the encapsulated codes"
 
     def __getitem__(self, index: int) -> GeckoCode:
         return self._children[index]
@@ -1102,8 +1102,8 @@ class IfGreaterThan32(GeckoCode):
 
     def as_bytes(self) -> bytes:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        metadata = (intType << 24) | self.address | (1 if self.endif else 0)
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | self._address | (1 if self._endif else 0)
         info = self.value
         body = b""
         for code in self:
@@ -1114,9 +1114,9 @@ class IfLesserThan32(GeckoCode):
     def __init__(self, value: Union[int, bytes], address: int = 0, isPointer: bool = False,
                  endif: bool = False):
         self.value = value
-        self.address = address
-        self.endif = endif
-        self.isPointer = isPointer
+        self._address = address
+        self._endif = endif
+        self._isPointer = isPointer
         self._children = []
 
     def __len__(self) -> int:
@@ -1124,10 +1124,10 @@ class IfLesserThan32(GeckoCode):
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        addrstr = "pointer address" if self.isPointer else "base address"
-        endif = "(Apply Endif) " if self.endif else ""
-        return f"({intType:02X}) {endif}If the word at address (0x{self.address:08X} + the {addrstr}) is lesser than 0x{self.value:08X}, run the encapsulated codes"
+            0x10 if self._isPointer else 0)
+        addrstr = "pointer address" if self._isPointer else "base address"
+        endif = "(Apply Endif) " if self._endif else ""
+        return f"({intType:02X}) {endif}If the word at address (0x{self._address:08X} + the {addrstr}) is lesser than 0x{self.value:08X}, run the encapsulated codes"
 
     def __getitem__(self, index: int) -> GeckoCode:
         return self._children[index]
@@ -1175,8 +1175,8 @@ class IfLesserThan32(GeckoCode):
 
     def as_bytes(self) -> bytes:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        metadata = (intType << 24) | self.address | (1 if self.endif else 0)
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | self._address | (1 if self._endif else 0)
         info = self.value
         body = b""
         for code in self:
@@ -1187,10 +1187,10 @@ class IfEqual16(GeckoCode):
     def __init__(self, value: Union[int, bytes], address: int = 0, isPointer: bool = False,
                  endif: bool = False, mask: int = 0xFFFF):
         self.value = value
-        self.address = address
-        self.endif = endif
-        self.mask = mask
-        self.isPointer = isPointer
+        self._address = address
+        self._endif = endif
+        self._mask = mask
+        self._isPointer = isPointer
         self._children = []
 
     def __len__(self) -> int:
@@ -1198,10 +1198,10 @@ class IfEqual16(GeckoCode):
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        addrstr = "pointer address" if self.isPointer else "base address"
-        endif = "(Apply Endif) " if self.endif else ""
-        return f"({intType:02X}) {endif}If the short at address (0x{self.address:08X} + the {addrstr}) & ~0x{self.mask:04X} is equal to 0x{self.value:04X}, run the encapsulated codes"
+            0x10 if self._isPointer else 0)
+        addrstr = "pointer address" if self._isPointer else "base address"
+        endif = "(Apply Endif) " if self._endif else ""
+        return f"({intType:02X}) {endif}If the short at address (0x{self._address:08X} + the {addrstr}) & ~0x{self._mask:04X} is equal to 0x{self.value:04X}, run the encapsulated codes"
 
     def __getitem__(self, index: int) -> GeckoCode:
         return self._children[index]
@@ -1249,9 +1249,9 @@ class IfEqual16(GeckoCode):
 
     def as_bytes(self) -> bytes:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        metadata = (intType << 24) | self.address | (1 if self.endif else 0)
-        info = (self.mask << 16) | self.value
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | self._address | (1 if self._endif else 0)
+        info = (self._mask << 16) | self.value
         return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False)
 
 
@@ -1259,10 +1259,10 @@ class IfNotEqual16(GeckoCode):
     def __init__(self, value: Union[int, bytes], address: int = 0, isPointer: bool = False,
                  endif: bool = False, mask: int = 0xFFFF):
         self.value = value
-        self.address = address
-        self.endif = endif
-        self.mask = mask
-        self.isPointer = isPointer
+        self._address = address
+        self._endif = endif
+        self._mask = mask
+        self._isPointer = isPointer
         self._children = []
 
     def __len__(self) -> int:
@@ -1270,10 +1270,10 @@ class IfNotEqual16(GeckoCode):
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        addrstr = "pointer address" if self.isPointer else "base address"
-        endif = "(Apply Endif) " if self.endif else ""
-        return f"({intType:02X}) {endif}If the short at address (0x{self.address:08X} + the {addrstr}) & ~0x{self.mask:04X} is not equal to 0x{self.value:04X}, run the encapsulated codes"
+            0x10 if self._isPointer else 0)
+        addrstr = "pointer address" if self._isPointer else "base address"
+        endif = "(Apply Endif) " if self._endif else ""
+        return f"({intType:02X}) {endif}If the short at address (0x{self._address:08X} + the {addrstr}) & ~0x{self._mask:04X} is not equal to 0x{self.value:04X}, run the encapsulated codes"
 
     def __getitem__(self, index: int) -> GeckoCode:
         return self._children[index]
@@ -1321,9 +1321,9 @@ class IfNotEqual16(GeckoCode):
 
     def as_bytes(self) -> bytes:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        metadata = (intType << 24) | self.address | (1 if self.endif else 0)
-        info = (self.mask << 16) | self.value
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | self._address | (1 if self._endif else 0)
+        info = (self._mask << 16) | self.value
         return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False)
 
 
@@ -1331,10 +1331,10 @@ class IfGreaterThan16(GeckoCode):
     def __init__(self, value: Union[int, bytes], address: int = 0, isPointer: bool = False,
                  endif: bool = False, mask: int = 0xFFFF):
         self.value = value
-        self.address = address
-        self.endif = endif
-        self.mask = mask
-        self.isPointer = isPointer
+        self._address = address
+        self._endif = endif
+        self._mask = mask
+        self._isPointer = isPointer
         self._children = []
 
     def __len__(self) -> int:
@@ -1342,10 +1342,10 @@ class IfGreaterThan16(GeckoCode):
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        addrstr = "pointer address" if self.isPointer else "base address"
-        endif = "(Apply Endif) " if self.endif else ""
-        return f"({intType:02X}) {endif}If the short at address (0x{self.address:08X} + the {addrstr}) & ~0x{self.mask:04X} is greater than 0x{self.value:04X}, run the encapsulated codes"
+            0x10 if self._isPointer else 0)
+        addrstr = "pointer address" if self._isPointer else "base address"
+        endif = "(Apply Endif) " if self._endif else ""
+        return f"({intType:02X}) {endif}If the short at address (0x{self._address:08X} + the {addrstr}) & ~0x{self._mask:04X} is greater than 0x{self.value:04X}, run the encapsulated codes"
 
     def __getitem__(self, index: int) -> GeckoCode:
         return self._children[index]
@@ -1393,9 +1393,9 @@ class IfGreaterThan16(GeckoCode):
 
     def as_bytes(self) -> bytes:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        metadata = (intType << 24) | self.address | (1 if self.endif else 0)
-        info = (self.mask << 16) | self.value
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | self._address | (1 if self._endif else 0)
+        info = (self._mask << 16) | self.value
         return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False)
 
 
@@ -1403,10 +1403,10 @@ class IfLesserThan16(GeckoCode):
     def __init__(self, value: Union[int, bytes], address: int = 0, isPointer: bool = False,
                  endif: bool = False, mask: int = 0xFFFF):
         self.value = value
-        self.address = address
-        self.endif = endif
-        self.mask = mask
-        self.isPointer = isPointer
+        self._address = address
+        self._endif = endif
+        self._mask = mask
+        self._isPointer = isPointer
         self._children = []
 
     def __len__(self) -> int:
@@ -1414,10 +1414,10 @@ class IfLesserThan16(GeckoCode):
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        addrstr = "pointer address" if self.isPointer else "base address"
-        endif = "(Apply Endif) " if self.endif else ""
-        return f"({intType:02X}) {endif}If the short at address (0x{self.address:08X} + the {addrstr}) & ~0x{self.mask:04X} is lesser than 0x{self.value:04X}, run the encapsulated codes"
+            0x10 if self._isPointer else 0)
+        addrstr = "pointer address" if self._isPointer else "base address"
+        endif = "(Apply Endif) " if self._endif else ""
+        return f"({intType:02X}) {endif}If the short at address (0x{self._address:08X} + the {addrstr}) & ~0x{self._mask:04X} is lesser than 0x{self.value:04X}, run the encapsulated codes"
 
     def __getitem__(self, index: int) -> GeckoCode:
         return self._children[index]
@@ -1465,9 +1465,9 @@ class IfLesserThan16(GeckoCode):
 
     def as_bytes(self) -> bytes:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        metadata = (intType << 24) | self.address | (1 if self.endif else 0)
-        info = (self.mask << 16) | self.value
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | self._address | (1 if self._endif else 0)
+        info = (self._mask << 16) | self.value
         return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False)
 
 
@@ -1476,15 +1476,15 @@ class BaseAddressLoad(GeckoCode):
         GeckoCode.assertRegister(register)
 
         self.value = value
-        self.flags = flags
+        self._flags = flags
         self._register = register
-        self.isPointer = isPointer
+        self._isPointer = isPointer
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        addrstr = "pointer address" if self.isPointer else "base address"
-        flags = self.flags
+            0x10 if self._isPointer else 0)
+        addrstr = "pointer address" if self._isPointer else "base address"
+        flags = self._flags
         if flags == 0x000:
             return f"({intType:02X}) Set the base address to the value at address [0x{self.value}]"
         elif flags == 0x001:
@@ -1538,21 +1538,28 @@ class BaseAddressLoad(GeckoCode):
     def virtual_length(self) -> int:
         return 1
 
+    def as_bytes(self) -> bytes:
+        intType = GeckoCode.type_to_int(self.codetype) | (
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | (self._flags << 12) | self._register
+        info = self.value
+        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False)
+
 
 class BaseAddressSet(GeckoCode):
     def __init__(self, value: int, flags: int = 0, register: int = 0, isPointer: bool = False):
         GeckoCode.assertRegister(register)
 
         self.value = value
-        self.flags = flags
+        self._flags = flags
         self._register = register
-        self.isPointer = isPointer
+        self._isPointer = isPointer
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        addrstr = "pointer address" if self.isPointer else "base address"
-        flags = self.flags
+            0x10 if self._isPointer else 0)
+        addrstr = "pointer address" if self._isPointer else "base address"
+        flags = self._flags
         if flags == 0x000:
             return f"({intType:02X}) Set the base address to the value 0x{self.value}"
         elif flags == 0x001:
@@ -1607,21 +1614,28 @@ class BaseAddressSet(GeckoCode):
     def virtual_length(self) -> int:
         return 1
 
+    def as_bytes(self) -> bytes:
+        intType = GeckoCode.type_to_int(self.codetype) | (
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | (self._flags << 12) | self._register
+        info = self.value
+        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False)
+
 
 class BaseAddressStore(GeckoCode):
     def __init__(self, value: int, flags: int = 0, register: int = 0, isPointer: bool = False):
         GeckoCode.assertRegister(register)
 
         self.value = value
-        self.flags = flags
+        self._flags = flags
         self._register = register
-        self.isPointer = isPointer
+        self._isPointer = isPointer
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        addrstr = "pointer address" if self.isPointer else "base address"
-        flags = self.flags
+            0x10 if self._isPointer else 0)
+        addrstr = "pointer address" if self._isPointer else "base address"
+        flags = self._flags
         if flags == 0x000:
             return f"({intType:02X}) Store the base address at address [0x{self.value}]"
         elif flags == 0x001:
@@ -1668,6 +1682,13 @@ class BaseAddressStore(GeckoCode):
     def virtual_length(self) -> int:
         return 1
 
+    def as_bytes(self) -> bytes:
+        intType = GeckoCode.type_to_int(self.codetype) | (
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | (self._flags << 12) | self._register
+        info = self.value
+        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False)
+
 
 class BaseAddressGetNext(GeckoCode):
     def __init__(self, value: int):
@@ -1713,21 +1734,27 @@ class BaseAddressGetNext(GeckoCode):
     def virtual_length(self) -> int:
         return 1
 
+    def as_bytes(self) -> bytes:
+        intType = GeckoCode.type_to_int(self.codetype) | (
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | self.value
+        return metadata.to_bytes(4, "big", signed=False) + b"\x00\x00\x00\x00"
+
 
 class PointerAddressLoad(GeckoCode):
     def __init__(self, value: int, flags: int = 0, register: int = 0, isPointer: bool = False):
         GeckoCode.assertRegister(register)
 
         self.value = value
-        self.flags = flags
+        self._flags = flags
         self._register = register
-        self.isPointer = isPointer
+        self._isPointer = isPointer
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        addrstr = "pointer address" if self.isPointer else "base address"
-        flags = self.flags
+            0x10 if self._isPointer else 0)
+        addrstr = "pointer address" if self._isPointer else "base address"
+        flags = self._flags
         if flags == 0x000:
             return f"({intType:02X}) Set the pointer address to the value at address [0x{self.value}]"
         elif flags == 0x001:
@@ -1781,21 +1808,28 @@ class PointerAddressLoad(GeckoCode):
     def virtual_length(self) -> int:
         return 1
 
+    def as_bytes(self) -> bytes:
+        intType = GeckoCode.type_to_int(self.codetype) | (
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | (self._flags << 12) | self._register
+        info = self.value
+        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False)
+
 
 class PointerAddressSet(GeckoCode):
     def __init__(self, value: int, flags: int = 0, register: int = 0, isPointer: bool = False):
         GeckoCode.assertRegister(register)
 
         self.value = value
-        self.flags = flags
+        self._flags = flags
         self._register = register
-        self.isPointer = isPointer
+        self._isPointer = isPointer
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        addrstr = "pointer address" if self.isPointer else "base address"
-        flags = self.flags
+            0x10 if self._isPointer else 0)
+        addrstr = "pointer address" if self._isPointer else "base address"
+        flags = self._flags
         if flags == 0x000:
             return f"({intType:02X}) Set the pointer address to the value 0x{self.value}"
         elif flags == 0x001:
@@ -1850,21 +1884,28 @@ class PointerAddressSet(GeckoCode):
     def virtual_length(self) -> int:
         return 1
 
+    def as_bytes(self) -> bytes:
+        intType = GeckoCode.type_to_int(self.codetype) | (
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | (self._flags << 12) | self._register
+        info = self.value
+        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False)
+
 
 class PointerAddressStore(GeckoCode):
     def __init__(self, value: int, flags: int = 0, register: int = 0, isPointer: bool = False):
         GeckoCode.assertRegister(register)
 
         self.value = value
-        self.flags = flags
+        self._flags = flags
         self._register = register
-        self.isPointer = isPointer
+        self._isPointer = isPointer
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        addrstr = "pointer address" if self.isPointer else "base address"
-        flags = self.flags
+            0x10 if self._isPointer else 0)
+        addrstr = "pointer address" if self._isPointer else "base address"
+        flags = self._flags
         if flags == 0x000:
             return f"({intType:02X}) Store the pointer address at address [0x{self.value}]"
         elif flags == 0x001:
@@ -1911,6 +1952,13 @@ class PointerAddressStore(GeckoCode):
     def virtual_length(self) -> int:
         return 1
 
+    def as_bytes(self) -> bytes:
+        intType = GeckoCode.type_to_int(self.codetype) | (
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | (self._flags << 12) | self._register
+        info = self.value
+        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False)
+
 
 class PointerAddressGetNext(GeckoCode):
     def __init__(self, value: int):
@@ -1956,10 +2004,15 @@ class PointerAddressGetNext(GeckoCode):
     def virtual_length(self) -> int:
         return 1
 
+    def as_bytes(self) -> bytes:
+        intType = GeckoCode.type_to_int(self.codetype) | (
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | self.value
+        return metadata.to_bytes(4, "big", signed=False) + b"\x00\x00\x00\x00"
 
 class SetRepeat(GeckoCode):
     def __init__(self, repeat: int = 0, b: int = 0):
-        self.repeat = repeat
+        self._repeat = repeat
         self.b = b
 
     def __str__(self) -> str:
@@ -1975,6 +2028,13 @@ class SetRepeat(GeckoCode):
 
     def virtual_length(self) -> int:
         return 1
+
+    def as_bytes(self) -> bytes:
+        intType = GeckoCode.type_to_int(self.codetype) | (
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | self._repeat
+        info = self.b
+        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False)
 
 
 class ExecuteRepeat(GeckoCode):
@@ -1995,19 +2055,26 @@ class ExecuteRepeat(GeckoCode):
     def virtual_length(self) -> int:
         return 1
 
+    def as_bytes(self) -> bytes:
+        intType = GeckoCode.type_to_int(self.codetype) | (
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24)
+        info = self.b
+        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False)
+
 
 class Return(GeckoCode):
     def __init__(self, flags: int = 0, b: int = 0):
         self.b = b
-        self.flags = flags
+        self._flags = flags
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype)
-        if self.flags == 0:
+        if self._flags == 0:
             return f"({intType:02X}) If the code execution status is true, jump to the next code address stored in b{self.b} (NNNN in bP is not touched)"
-        elif self.flags == 1:
+        elif self._flags == 1:
             return f"({intType:02X}) If the code execution status is false, jump to the next code address stored in b{self.b} (NNNN in bP is not touched)"
-        elif self.flags == 2:
+        elif self._flags == 2:
             return f"({intType:02X}) Jump to the next code address stored in b{self.b} (NNNN in bP is not touched)"
 
     def __len__(self) -> int:
@@ -2020,19 +2087,26 @@ class Return(GeckoCode):
     def virtual_length(self) -> int:
         return 1
 
+    def as_bytes(self) -> bytes:
+        intType = GeckoCode.type_to_int(self.codetype) | (
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | (self._flags << 20)
+        info = self.b
+        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False)
+
 
 class Goto(GeckoCode):
     def __init__(self, flags: int = 0, lineOffset: int = 0):
-        self.flags = flags
+        self._flags = flags
         self.offset = lineOffset
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype)
-        if self.flags == 0:
+        if self._flags == 0:
             return f"({intType:02X}) If the code execution status is true, jump to (next line of code + {self.offset} lines)"
-        elif self.flags == 1:
+        elif self._flags == 1:
             return f"({intType:02X}) If the code execution status is false, jump to (next line of code + {self.offset} lines)"
-        elif self.flags == 2:
+        elif self._flags == 2:
             return f"({intType:02X}) Jump to (next line of code + {self.offset} lines)"
 
     def __len__(self) -> int:
@@ -2045,21 +2119,27 @@ class Goto(GeckoCode):
     def virtual_length(self) -> int:
         return 1
 
+    def as_bytes(self) -> bytes:
+        intType = GeckoCode.type_to_int(self.codetype) | (
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | (self._flags << 20) | self.offset
+        return metadata.to_bytes(4, "big", signed=False) + b"\x00\x00\x00\x00"
+
 
 class Gosub(GeckoCode):
     def __init__(self, flags: int = 0, lineOffset: int = 0, register: int = 0):
-        self.flags = flags
+        self._flags = flags
         self.offset = lineOffset
-        self.register = register
+        self._register = register
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype)
-        if self.flags == 0:
-            return f"({intType:02X}) If the code execution status is true, store the next code address in b{self.register} and jump to (next line of code + {self.offset} lines)"
-        elif self.flags == 1:
-            return f"({intType:02X}) If the code execution status is false, store the next code address in b{self.register} and jump to (next line of code + {self.offset} lines)"
-        elif self.flags == 2:
-            return f"({intType:02X}) Store the next code address in b{self.register} and jump to (next line of code + {self.offset} lines)"
+        if self._flags == 0:
+            return f"({intType:02X}) If the code execution status is true, store the next code address in b{self._register} and jump to (next line of code + {self.offset} lines)"
+        elif self._flags == 1:
+            return f"({intType:02X}) If the code execution status is false, store the next code address in b{self._register} and jump to (next line of code + {self.offset} lines)"
+        elif self._flags == 2:
+            return f"({intType:02X}) Store the next code address in b{self._register} and jump to (next line of code + {self.offset} lines)"
 
     def __len__(self) -> int:
         return 8
@@ -2071,21 +2151,28 @@ class Gosub(GeckoCode):
     def virtual_length(self) -> int:
         return 1
 
+    def as_bytes(self) -> bytes:
+        intType = GeckoCode.type_to_int(self.codetype) | (
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | (self._flags << 20) | self.offset
+        info = self._register
+        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False)
+
 
 class GeckoRegisterSet(GeckoCode):
     def __init__(self, value: int, flags: int = 0, register: int = 0, isPointer: bool = False):
         GeckoCode.assertRegister(register)
 
         self.value = value
-        self.flags = flags
+        self._flags = flags
         self._register = register
-        self.isPointer = isPointer
+        self._isPointer = isPointer
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        addrstr = "pointer address" if self.isPointer else "base address"
-        flags = self.flags
+            0x10 if self._isPointer else 0)
+        addrstr = "pointer address" if self._isPointer else "base address"
+        flags = self._flags
         if flags == 0x00:
             return f"({intType:02X}) Set Gecko Register {self._register} to the value 0x{self.value}"
         elif flags == 0x01:
@@ -2138,15 +2225,15 @@ class GeckoRegisterLoad(GeckoCode):
         GeckoCode.assertRegister(register)
 
         self.value = value
-        self.flags = flags
+        self._flags = flags
         self._register = register
-        self.isPointer = isPointer
+        self._isPointer = isPointer
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        addrstr = "pointer address" if self.isPointer else "base address"
-        flags = self.flags
+            0x10 if self._isPointer else 0)
+        addrstr = "pointer address" if self._isPointer else "base address"
+        flags = self._flags
         if flags == 0x00:
             return f"({intType:02X}) Set Gecko Register {self._register} to the byte at address 0x{self.value}"
         elif flags == 0x10:
@@ -2204,27 +2291,27 @@ class GeckoRegisterStore(GeckoCode):
         GeckoCode.assertRegister(register)
 
         self.value = value
-        self.valueSize = valueSize
-        self.flags = flags
-        self.repeat = repeat
+        self._valueSize = valueSize
+        self._flags = flags
+        self._repeat = repeat
         self._register = register
-        self.isPointer = isPointer
+        self._isPointer = isPointer
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        addrstr = "pointer address" if self.isPointer else "base address"
-        valueType = ("byte", "short", "word")[self.valueSize]
+            0x10 if self._isPointer else 0)
+        addrstr = "pointer address" if self._isPointer else "base address"
+        valueType = ("byte", "short", "word")[self._valueSize]
 
-        flags = self.flags
+        flags = self._flags
         if flags > 0x21:
             return f"({intType:02X}) Invalid flag {flags}"
 
-        if self.repeat > 0:
+        if self._repeat > 0:
             if flags & 0x01:
-                return f"({intType:02X}) Store Gecko Register {self._register}'s {valueType} to [0x{self.value} + the {addrstr}] {self.repeat + 1} times consecutively"
+                return f"({intType:02X}) Store Gecko Register {self._register}'s {valueType} to [0x{self.value} + the {addrstr}] {self._repeat + 1} times consecutively"
             else:
-                return f"({intType:02X}) Store Gecko Register {self._register}'s {valueType} to [0x{self.value}] {self.repeat + 1} times consecutively"
+                return f"({intType:02X}) Store Gecko Register {self._register}'s {valueType} to [0x{self.value}] {self._repeat + 1} times consecutively"
         else:
             if flags & 0x01:
                 return f"({intType:02X}) Store Gecko Register {self._register}'s {valueType} to [0x{self.value} + the {addrstr}]"
@@ -2273,17 +2360,17 @@ class GeckoRegisterOperateI(GeckoCode):
         GeckoCode.assertRegister(register)
 
         self.value = value
-        self.opType = opType
+        self._opType = opType
         self._register = register
-        self.flags = flags
+        self._flags = flags
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype)
         grAccessType = f"[Gecko Register {self._register}]" if (
-            self.flags & 1) != 0 else f"Gecko Register {self._register}"
+            self._flags & 1) != 0 else f"Gecko Register {self._register}"
         valueAccessType = f"[{self.value}]" if (
-            self.flags & 0x2) != 0 else f"{self.value}"
-        opType = self.opType
+            self._flags & 0x2) != 0 else f"{self.value}"
+        opType = self._opType
         if opType == GeckoCode.ArithmeticType.ADD:
             return f"({intType:02X}) Add {valueAccessType} to {grAccessType}"
         elif opType == GeckoCode.ArithmeticType.MUL:
@@ -2348,18 +2435,18 @@ class GeckoRegisterOperate(GeckoCode):
         GeckoCode.assertRegister(register)
         GeckoCode.assertRegister(otherRegister)
 
-        self.opType = opType
+        self._opType = opType
         self._register = register
         self._other = otherRegister
-        self.flags = flags
+        self._flags = flags
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype)
         grAccessType = f"[Gecko Register {self._register}]" if (
-            self.flags & 1) != 0 else f"Gecko Register {self._register}"
+            self._flags & 1) != 0 else f"Gecko Register {self._register}"
         valueAccessType = f"[Gecko Register {self._other}]" if (
-            self.flags & 0x2) != 0 else f"Gecko Register {self._other}"
-        opType = self.opType
+            self._flags & 0x2) != 0 else f"Gecko Register {self._other}"
+        opType = self._opType
         if opType == GeckoCode.ArithmeticType.ADD:
             return f"({intType:02X}) Add {valueAccessType} to {grAccessType}"
         elif opType == GeckoCode.ArithmeticType.MUL:
@@ -2426,20 +2513,20 @@ class MemoryCopyTo(GeckoCode):
         GeckoCode.assertRegister(otherRegister)
 
         self.value = value
-        self.size = size
+        self._size = size
         self._register = register
         self._other = otherRegister
-        self.isPointer = isPointer
+        self._isPointer = isPointer
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        addrstr = "pointer address" if self.isPointer else "base address"
+            0x10 if self._isPointer else 0)
+        addrstr = "pointer address" if self._isPointer else "base address"
 
         if self._other == 0xF:
-            return f"({intType:02X}) Copy 0x{self.size:04X} bytes from [Gecko Register {self._register}] to (the {addrstr} + 0x{self.value})"
+            return f"({intType:02X}) Copy 0x{self._size:04X} bytes from [Gecko Register {self._register}] to (the {addrstr} + 0x{self.value})"
         else:
-            return f"({intType:02X}) Copy 0x{self.size:04X} bytes from [Gecko Register {self._register}] to ([Gecko Register {self._other}] + 0x{self.value})"
+            return f"({intType:02X}) Copy 0x{self._size:04X} bytes from [Gecko Register {self._register}] to ([Gecko Register {self._other}] + 0x{self.value})"
 
     def __len__(self) -> int:
         return 8
@@ -2485,20 +2572,20 @@ class MemoryCopyFrom(GeckoCode):
         GeckoCode.assertRegister(otherRegister)
 
         self.value = value
-        self.size = size
+        self._size = size
         self._register = register
         self._other = otherRegister
-        self.isPointer = isPointer
+        self._isPointer = isPointer
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        addrstr = "pointer address" if self.isPointer else "base address"
+            0x10 if self._isPointer else 0)
+        addrstr = "pointer address" if self._isPointer else "base address"
 
         if self._other == 0xF:
-            return f"({intType:02X}) Copy 0x{self.size:04X} bytes from (the {addrstr} + 0x{self.value}) to [Gecko Register {self._register}]"
+            return f"({intType:02X}) Copy 0x{self._size:04X} bytes from (the {addrstr} + 0x{self.value}) to [Gecko Register {self._register}]"
         else:
-            return f"({intType:02X}) Copy 0x{self.size:04X} bytes from ([Gecko Register {self._other}] + 0x{self.value}) to [Gecko Register {self._register}]"
+            return f"({intType:02X}) Copy 0x{self._size:04X} bytes from ([Gecko Register {self._other}] + 0x{self.value}) to [Gecko Register {self._register}]"
 
     def __len__(self) -> int:
         return 8
@@ -2543,12 +2630,12 @@ class GeckoIfEqual16(GeckoCode):
         GeckoCode.assertRegister(register)
         GeckoCode.assertRegister(otherRegister)
 
-        self.mask = mask
-        self.address = address
-        self.endif = endif
+        self._mask = mask
+        self._address = address
+        self._endif = endif
         self._register = register
         self._other = otherRegister
-        self.isPointer = isPointer
+        self._isPointer = isPointer
         self._children = []
 
     def __len__(self) -> int:
@@ -2556,11 +2643,11 @@ class GeckoIfEqual16(GeckoCode):
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        addrstr = "pointer address" if self.isPointer else "base address"
-        home = f"(Gecko Register {self._register} & ~0x{self.mask:04X})" if self._register != 0xF else f"the short at address (0x{self.address:08X} + the {addrstr})"
-        target = f"(Gecko Register {self._other} & ~0x{self.mask:04X})" if self._other != 0xF else f"the short at address (0x{self.address:08X} + the {addrstr})"
-        endif = "(Apply Endif) " if self.endif else ""
+            0x10 if self._isPointer else 0)
+        addrstr = "pointer address" if self._isPointer else "base address"
+        home = f"(Gecko Register {self._register} & ~0x{self._mask:04X})" if self._register != 0xF else f"the short at address (0x{self._address:08X} + the {addrstr})"
+        target = f"(Gecko Register {self._other} & ~0x{self._mask:04X})" if self._other != 0xF else f"the short at address (0x{self._address:08X} + the {addrstr})"
+        endif = "(Apply Endif) " if self._endif else ""
         return f"({intType:02X}) {endif}If {home} is equal to {target}, run the encapsulated codes"
 
     def __getitem__(self, index: int) -> GeckoCode:
@@ -2604,12 +2691,12 @@ class GeckoIfNotEqual16(GeckoCode):
         GeckoCode.assertRegister(register)
         GeckoCode.assertRegister(otherRegister)
 
-        self.mask = mask
-        self.address = address
-        self.endif = endif
+        self._mask = mask
+        self._address = address
+        self._endif = endif
         self._register = register
         self._other = otherRegister
-        self.isPointer = isPointer
+        self._isPointer = isPointer
         self._children = []
 
     def __len__(self) -> int:
@@ -2617,11 +2704,11 @@ class GeckoIfNotEqual16(GeckoCode):
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        addrstr = "pointer address" if self.isPointer else "base address"
-        home = f"(Gecko Register {self._register} & ~0x{self.mask:04X})" if self._register != 0xF else f"the short at address (0x{self.address:08X} + the {addrstr})"
-        target = f"(Gecko Register {self._other} & ~0x{self.mask:04X})" if self._other != 0xF else f"the short at address (0x{self.address:08X} + the {addrstr})"
-        endif = "(Apply Endif) " if self.endif else ""
+            0x10 if self._isPointer else 0)
+        addrstr = "pointer address" if self._isPointer else "base address"
+        home = f"(Gecko Register {self._register} & ~0x{self._mask:04X})" if self._register != 0xF else f"the short at address (0x{self._address:08X} + the {addrstr})"
+        target = f"(Gecko Register {self._other} & ~0x{self._mask:04X})" if self._other != 0xF else f"the short at address (0x{self._address:08X} + the {addrstr})"
+        endif = "(Apply Endif) " if self._endif else ""
         return f"({intType:02X}) {endif}If {home} is not equal to {target}, run the encapsulated codes"
 
     def __getitem__(self, index: int) -> GeckoCode:
@@ -2665,12 +2752,12 @@ class GeckoIfGreaterThan16(GeckoCode):
         GeckoCode.assertRegister(register)
         GeckoCode.assertRegister(otherRegister)
 
-        self.mask = mask
-        self.address = address
-        self.endif = endif
+        self._mask = mask
+        self._address = address
+        self._endif = endif
         self._register = register
         self._other = otherRegister
-        self.isPointer = isPointer
+        self._isPointer = isPointer
         self._children = []
 
     def __len__(self) -> int:
@@ -2678,11 +2765,11 @@ class GeckoIfGreaterThan16(GeckoCode):
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        addrstr = "pointer address" if self.isPointer else "base address"
-        home = f"(Gecko Register {self._register} & ~0x{self.mask:04X})" if self._register != 0xF else f"the short at address (0x{self.address:08X} + the {addrstr})"
-        target = f"(Gecko Register {self._other} & ~0x{self.mask:04X})" if self._other != 0xF else f"the short at address (0x{self.address:08X} + the {addrstr})"
-        endif = "(Apply Endif) " if self.endif else ""
+            0x10 if self._isPointer else 0)
+        addrstr = "pointer address" if self._isPointer else "base address"
+        home = f"(Gecko Register {self._register} & ~0x{self._mask:04X})" if self._register != 0xF else f"the short at address (0x{self._address:08X} + the {addrstr})"
+        target = f"(Gecko Register {self._other} & ~0x{self._mask:04X})" if self._other != 0xF else f"the short at address (0x{self._address:08X} + the {addrstr})"
+        endif = "(Apply Endif) " if self._endif else ""
         return f"({intType:02X}) {endif}If {home} is greater than {target}, run the encapsulated codes"
 
     def __getitem__(self, index: int) -> GeckoCode:
@@ -2726,12 +2813,12 @@ class GeckoIfLesserThan16(GeckoCode):
         GeckoCode.assertRegister(register)
         GeckoCode.assertRegister(otherRegister)
 
-        self.mask = mask
-        self.address = address
-        self.endif = endif
+        self._mask = mask
+        self._address = address
+        self._endif = endif
         self._register = register
         self._other = otherRegister
-        self.isPointer = isPointer
+        self._isPointer = isPointer
         self._children = []
 
     def __len__(self) -> int:
@@ -2739,11 +2826,11 @@ class GeckoIfLesserThan16(GeckoCode):
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        addrstr = "pointer address" if self.isPointer else "base address"
-        home = f"(Gecko Register {self._register} & ~0x{self.mask:04X})" if self._register != 0xF else f"the short at address (0x{self.address:08X} + the {addrstr})"
-        target = f"(Gecko Register {self._other} & ~0x{self.mask:04X})" if self._other != 0xF else f"the short at address (0x{self.address:08X} + the {addrstr})"
-        endif = "(Apply Endif) " if self.endif else ""
+            0x10 if self._isPointer else 0)
+        addrstr = "pointer address" if self._isPointer else "base address"
+        home = f"(Gecko Register {self._register} & ~0x{self._mask:04X})" if self._register != 0xF else f"the short at address (0x{self._address:08X} + the {addrstr})"
+        target = f"(Gecko Register {self._other} & ~0x{self._mask:04X})" if self._other != 0xF else f"the short at address (0x{self._address:08X} + the {addrstr})"
+        endif = "(Apply Endif) " if self._endif else ""
         return f"({intType:02X}) {endif}If {home} is less than {target}, run the encapsulated codes"
 
     def __getitem__(self, index: int) -> GeckoCode:
@@ -2787,12 +2874,12 @@ class GeckoIfLesserThan16(GeckoCode):
         GeckoCode.assertRegister(register)
         GeckoCode.assertRegister(otherRegister)
 
-        self.mask = mask
-        self.address = address
-        self.endif = endif
+        self._mask = mask
+        self._address = address
+        self._endif = endif
         self._register = register
         self._other = otherRegister
-        self.isPointer = isPointer
+        self._isPointer = isPointer
         self._children = []
 
     def __len__(self) -> int:
@@ -2800,11 +2887,11 @@ class GeckoIfLesserThan16(GeckoCode):
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        addrstr = "pointer address" if self.isPointer else "base address"
-        home = f"(Gecko Register {self._register} & ~0x{self.mask:04X})" if self._register != 0xF else f"the short at address (0x{self.address:08X} + the {addrstr})"
-        target = f"(Gecko Register {self._other} & ~0x{self.mask:04X})" if self._other != 0xF else f"the short at address (0x{self.address:08X} + the {addrstr})"
-        endif = "(Apply Endif) " if self.endif else ""
+            0x10 if self._isPointer else 0)
+        addrstr = "pointer address" if self._isPointer else "base address"
+        home = f"(Gecko Register {self._register} & ~0x{self._mask:04X})" if self._register != 0xF else f"the short at address (0x{self._address:08X} + the {addrstr})"
+        target = f"(Gecko Register {self._other} & ~0x{self._mask:04X})" if self._other != 0xF else f"the short at address (0x{self._address:08X} + the {addrstr})"
+        endif = "(Apply Endif) " if self._endif else ""
         return f"({intType:02X}) {endif}If {home} is less than {target}, run the encapsulated codes"
 
     def __getitem__(self, index: int) -> GeckoCode:
@@ -2846,8 +2933,8 @@ class CounterIfEqual16(GeckoCode):
     def __init__(self, value: int, mask: int = 0xFFFF,
                  flags: int = 0, counter: int = 0):
         self.value = value
-        self.mask = mask
-        self.flags = flags
+        self._mask = mask
+        self._flags = flags
         self.counter = counter
         self._children = []
 
@@ -2856,10 +2943,10 @@ class CounterIfEqual16(GeckoCode):
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype)
-        ty = " (Resets counter if true)" if (self.flags &
+        ty = " (Resets counter if true)" if (self._flags &
                                              0x8) != 0 else " (Resets counter if false)"
-        endif = "(Apply Endif) " if (self.flags & 0x1) != 0 else ""
-        return f"({intType:02X}) {endif}If (0x{self.value:04X} & ~0x{self.mask:04X}) is equal to {self.counter}, run the encapsulated codes{ty}"
+        endif = "(Apply Endif) " if (self._flags & 0x1) != 0 else ""
+        return f"({intType:02X}) {endif}If (0x{self.value:04X} & ~0x{self._mask:04X}) is equal to {self.counter}, run the encapsulated codes{ty}"
 
     def __getitem__(self, index: int) -> GeckoCode:
         return self._children[index]
@@ -2910,8 +2997,8 @@ class CounterIfNotEqual16(GeckoCode):
     def __init__(self, value: int, mask: int = 0xFFFF,
                  flags: int = 0, counter: int = 0):
         self.value = value
-        self.mask = mask
-        self.flags = flags
+        self._mask = mask
+        self._flags = flags
         self.counter = counter
         self._children = []
 
@@ -2920,10 +3007,10 @@ class CounterIfNotEqual16(GeckoCode):
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype)
-        ty = " (Resets counter if true)" if (self.flags &
+        ty = " (Resets counter if true)" if (self._flags &
                                              0x8) != 0 else " (Resets counter if false)"
-        endif = "(Apply Endif) " if (self.flags & 0x1) != 0 else ""
-        return f"({intType:02X}) {endif}If (0x{self.value:04X} & ~0x{self.mask:04X}) is not equal to {self.counter}, run the encapsulated codes{ty}"
+        endif = "(Apply Endif) " if (self._flags & 0x1) != 0 else ""
+        return f"({intType:02X}) {endif}If (0x{self.value:04X} & ~0x{self._mask:04X}) is not equal to {self.counter}, run the encapsulated codes{ty}"
 
     def __getitem__(self, index: int) -> GeckoCode:
         return self._children[index]
@@ -2974,8 +3061,8 @@ class CounterIfGreaterThan16(GeckoCode):
     def __init__(self, value: int, mask: int = 0xFFFF,
                  flags: int = 0, counter: int = 0):
         self.value = value
-        self.mask = mask
-        self.flags = flags
+        self._mask = mask
+        self._flags = flags
         self.counter = counter
         self._children = []
 
@@ -2984,10 +3071,10 @@ class CounterIfGreaterThan16(GeckoCode):
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype)
-        ty = " (Resets counter if true)" if (self.flags &
+        ty = " (Resets counter if true)" if (self._flags &
                                              0x8) != 0 else " (Resets counter if false)"
-        endif = "(Apply Endif) " if (self.flags & 0x1) != 0 else ""
-        return f"({intType:02X}) {endif}If (0x{self.value:04X} & ~0x{self.mask:04X}) is greater than {self.counter}, run the encapsulated codes{ty}"
+        endif = "(Apply Endif) " if (self._flags & 0x1) != 0 else ""
+        return f"({intType:02X}) {endif}If (0x{self.value:04X} & ~0x{self._mask:04X}) is greater than {self.counter}, run the encapsulated codes{ty}"
 
     def __getitem__(self, index: int) -> GeckoCode:
         return self._children[index]
@@ -3038,8 +3125,8 @@ class CounterIfLesserThan16(GeckoCode):
     def __init__(self, value: int, mask: int = 0xFFFF,
                  flags: int = 0, counter: int = 0):
         self.value = value
-        self.mask = mask
-        self.flags = flags
+        self._mask = mask
+        self._flags = flags
         self.counter = counter
         self._children = []
 
@@ -3048,10 +3135,10 @@ class CounterIfLesserThan16(GeckoCode):
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype)
-        ty = " (Resets counter if true)" if (self.flags &
+        ty = " (Resets counter if true)" if (self._flags &
                                              0x8) != 0 else " (Resets counter if false)"
-        endif = "(Apply Endif) " if (self.flags & 0x1) != 0 else ""
-        return f"({intType:02X}) {endif}If (0x{self.value:04X} & ~0x{self.mask:04X}) is less than {self.counter}, run the encapsulated codes{ty}"
+        endif = "(Apply Endif) " if (self._flags & 0x1) != 0 else ""
+        return f"({intType:02X}) {endif}If (0x{self.value:04X} & ~0x{self._mask:04X}) is less than {self.counter}, run the encapsulated codes{ty}"
 
     def __getitem__(self, index: int) -> GeckoCode:
         return self._children[index]
@@ -3137,17 +3224,17 @@ class AsmExecute(GeckoCode):
 class AsmInsert(GeckoCode):
     def __init__(self, value: bytes, address: int = 0, isPointer: bool = False):
         self.value = value
-        self.address = address
-        self.isPointer = isPointer
+        self._address = address
+        self._isPointer = isPointer
 
     def __len__(self) -> int:
         return 8 + len(self.value)
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        addrstr = "pointer address" if self.isPointer else "base address"
-        return f"({intType:02X}) Inject (b / b) the designated ASM at 0x{self.address:08X} + the {addrstr}"
+            0x10 if self._isPointer else 0)
+        addrstr = "pointer address" if self._isPointer else "base address"
+        return f"({intType:02X}) Inject (b / b) the designated ASM at 0x{self._address:08X} + the {addrstr}"
 
     def __getitem__(self, index: int) -> bytes:
         return self.value[index]
@@ -3177,17 +3264,17 @@ class AsmInsert(GeckoCode):
 class AsmInsertLink(GeckoCode):
     def __init__(self, value: bytes, address: int = 0, isPointer: bool = False):
         self.value = value
-        self.address = address
-        self.isPointer = isPointer
+        self._address = address
+        self._isPointer = isPointer
 
     def __len__(self) -> int:
         return 8 + len(self.value)
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        addrstr = "pointer address" if self.isPointer else "base address"
-        return f"({intType:02X}) Inject (bl / blr) the designated ASM at 0x{self.address:08X} + the {addrstr}"
+            0x10 if self._isPointer else 0)
+        addrstr = "pointer address" if self._isPointer else "base address"
+        return f"({intType:02X}) Inject (bl / blr) the designated ASM at 0x{self._address:08X} + the {addrstr}"
 
     def __getitem__(self, index: int) -> bytes:
         return self.value[index]
@@ -3217,17 +3304,17 @@ class AsmInsertLink(GeckoCode):
 class WriteBranch(GeckoCode):
     def __init__(self, value: Union[int, bytes], address: int = 0, isPointer: bool = False):
         self.value = value
-        self.address = address
-        self.isPointer = isPointer
+        self._address = address
+        self._isPointer = isPointer
 
     def __len__(self) -> int:
         return 8
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        addrstr = "pointer address" if self.isPointer else "base address"
-        return f"({intType:02X}) Write a translated branch at (0x{self.address:08X} + the {addrstr}) to 0x{self.value:08X}"
+            0x10 if self._isPointer else 0)
+        addrstr = "pointer address" if self._isPointer else "base address"
+        return f"({intType:02X}) Write a translated branch at (0x{self._address:08X} + the {addrstr}) to 0x{self.value:08X}"
 
     def __getitem__(self, index: int) -> int:
         if index != 0:
@@ -3263,7 +3350,7 @@ class WriteBranch(GeckoCode):
         return 1
 
     def apply(self, dol: DolFile) -> bool:
-        addr = self.address | 0x80000000
+        addr = self._address | 0x80000000
         if dol.is_mapped(addr):
             dol.seek(addr)
             dol.insert_branch(self.value, addr, lk=addr & 1)
@@ -3293,17 +3380,17 @@ class Switch(GeckoCode):
 class AddressRangeCheck(GeckoCode):
     def __init__(self, value: int, isPointer: bool = False, endif: bool = False):
         self.value = value
-        self.isPointer = isPointer
-        self.endif = endif
+        self._isPointer = isPointer
+        self._endif = endif
 
     def __len__(self) -> int:
         return 8
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype) | (
-            0x10 if self.isPointer else 0)
-        addrstr = "pointer address" if self.isPointer else "base address"
-        endif = "(Apply Endif) " if self.endif else ""
+            0x10 if self._isPointer else 0)
+        addrstr = "pointer address" if self._isPointer else "base address"
+        endif = "(Apply Endif) " if self._endif else ""
         return f"({intType:02X}) {endif}Check if 0x{self[0]} <= {addrstr} < 0x{self[1]}"
 
     def __getitem__(self, index: int) -> int:
@@ -3397,7 +3484,7 @@ class Endif(GeckoCode):
     def __init__(self, value: int, asElse: bool = False, numEndifs: int = 0):
         self.value = value
         self.asElse = asElse
-        self.endifNum = numEndifs
+        self._endifNum = numEndifs
 
     def __len__(self) -> int:
         return 8
@@ -3407,7 +3494,7 @@ class Endif(GeckoCode):
         baStr = f" Set the base address to {self[0]}." if self[0] != 0 else ""
         poStr = f" Set the pointer address to {self[1]}." if self[1] != 0 else ""
         elseStr = "Inverse the code execution status (else) " if self.asElse else ""
-        endif = "(Apply Endif) " if self.endifNum == 1 else f"(Apply {self.endifNum} Endifs) "
+        endif = "(Apply Endif) " if self._endifNum == 1 else f"(Apply {self._endifNum} Endifs) "
         return f"({intType:02X}) {endif}{elseStr}{baStr}{poStr}"
 
     def __getitem__(self, index: int) -> int:
@@ -3469,19 +3556,19 @@ class Exit(GeckoCode):
 class AsmInsertXOR(GeckoCode):
     def __init__(self, value: bytes, address: int = 0, isPointer: bool = False, mask: int = 0, xorCount: int = 0):
         self.value = value
-        self.mask = mask
+        self._mask = mask
         self.xorCount = xorCount
-        self.address = address
-        self.isPointer = isPointer
+        self._address = address
+        self._isPointer = isPointer
 
     def __len__(self) -> int:
         return 8 + len(self.value)
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype) + (
-            2 if self.isPointer else 0)
-        addrstr = "pointer address" if self.isPointer else "base address"
-        return f"({intType:02X}) Inject (b / b) the designated ASM at (0x{self.address:08X} + the {addrstr}) if the 16-bit value at the injection point (and {self.xorCount} additional values) XOR'ed equals 0x{self.mask:04X}"
+            2 if self._isPointer else 0)
+        addrstr = "pointer address" if self._isPointer else "base address"
+        return f"({intType:02X}) Inject (b / b) the designated ASM at (0x{self._address:08X} + the {addrstr}) if the 16-bit value at the injection point (and {self.xorCount} additional values) XOR'ed equals 0x{self._mask:04X}"
 
     def __getitem__(self, index: int) -> bytes:
         return self.value[index]
@@ -3511,7 +3598,7 @@ class AsmInsertXOR(GeckoCode):
 class BrainslugSearch(GeckoCode):
     def __init__(self, value: Union[int, bytes], address: int = 0, searchRange: Tuple[int, int] = [0x8000, 0x8180]):
         self.value = value
-        self.address = address
+        self._address = address
         self.searchRange = searchRange
         self._children = []
 
