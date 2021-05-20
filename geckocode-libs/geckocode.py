@@ -482,7 +482,7 @@ class GeckoCode(object):
         self._iterpos = 0
         return self
 
-    def __next__(self):
+    def __next__(self) -> Union[int, bytes, "GeckoCode"]:
         try:
             self._iterpos += 1
             return self[self._iterpos-1]
@@ -545,6 +545,7 @@ class GeckoCode(object):
             else:
                 stringRepr += f"{nibble.hex()}"
         return stringRepr
+
 
 class Write8(GeckoCode):
     def __init__(self, value: Union[int, bytes], repeat: int = 0, address: int = 0, isPointer: bool = False):
@@ -1110,6 +1111,7 @@ class IfGreaterThan32(GeckoCode):
             body += code.as_bytes()
         return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False) + body
 
+
 class IfLesserThan32(GeckoCode):
     def __init__(self, value: Union[int, bytes], address: int = 0, isPointer: bool = False,
                  endif: bool = False):
@@ -1183,6 +1185,7 @@ class IfLesserThan32(GeckoCode):
             body += code.as_bytes()
         return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False) + body
 
+
 class IfEqual16(GeckoCode):
     def __init__(self, value: Union[int, bytes], address: int = 0, isPointer: bool = False,
                  endif: bool = False, mask: int = 0xFFFF):
@@ -1252,7 +1255,10 @@ class IfEqual16(GeckoCode):
             0x10 if self._isPointer else 0)
         metadata = (intType << 24) | self._address | (1 if self._endif else 0)
         info = (self._mask << 16) | self.value
-        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False)
+        body = b""
+        for code in self:
+            body += code.as_bytes()
+        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False) + body
 
 
 class IfNotEqual16(GeckoCode):
@@ -1324,7 +1330,10 @@ class IfNotEqual16(GeckoCode):
             0x10 if self._isPointer else 0)
         metadata = (intType << 24) | self._address | (1 if self._endif else 0)
         info = (self._mask << 16) | self.value
-        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False)
+        body = b""
+        for code in self:
+            body += code.as_bytes()
+        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False) + body
 
 
 class IfGreaterThan16(GeckoCode):
@@ -1396,7 +1405,10 @@ class IfGreaterThan16(GeckoCode):
             0x10 if self._isPointer else 0)
         metadata = (intType << 24) | self._address | (1 if self._endif else 0)
         info = (self._mask << 16) | self.value
-        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False)
+        body = b""
+        for code in self:
+            body += code.as_bytes()
+        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False) + body
 
 
 class IfLesserThan16(GeckoCode):
@@ -1468,7 +1480,10 @@ class IfLesserThan16(GeckoCode):
             0x10 if self._isPointer else 0)
         metadata = (intType << 24) | self._address | (1 if self._endif else 0)
         info = (self._mask << 16) | self.value
-        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False)
+        body = b""
+        for code in self:
+            body += code.as_bytes()
+        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False) + body
 
 
 class BaseAddressLoad(GeckoCode):
@@ -2010,6 +2025,7 @@ class PointerAddressGetNext(GeckoCode):
         metadata = (intType << 24) | self.value
         return metadata.to_bytes(4, "big", signed=False) + b"\x00\x00\x00\x00"
 
+
 class SetRepeat(GeckoCode):
     def __init__(self, repeat: int = 0, b: int = 0):
         self._repeat = repeat
@@ -2219,6 +2235,13 @@ class GeckoRegisterSet(GeckoCode):
     def virtual_length(self) -> int:
         return 1
 
+    def as_bytes(self) -> bytes:
+        intType = GeckoCode.type_to_int(self.codetype) | (
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | (self._flags << 12) | self._register
+        info = self.value
+        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False)
+
 
 class GeckoRegisterLoad(GeckoCode):
     def __init__(self, value: int, flags: int = 0, register: int = 0, isPointer: bool = False):
@@ -2283,6 +2306,13 @@ class GeckoRegisterLoad(GeckoCode):
 
     def virtual_length(self) -> int:
         return 1
+
+    def as_bytes(self) -> bytes:
+        intType = GeckoCode.type_to_int(self.codetype) | (
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | (self._flags << 12) | self._register
+        info = self.value
+        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False)
 
 
 class GeckoRegisterStore(GeckoCode):
@@ -2353,6 +2383,14 @@ class GeckoRegisterStore(GeckoCode):
 
     def virtual_length(self) -> int:
         return 1
+
+    def as_bytes(self) -> bytes:
+        intType = GeckoCode.type_to_int(self.codetype) | (
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | (self._flags << 12) | (
+            self._repeat << 4) | self._register
+        info = self.value
+        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False)
 
 
 class GeckoRegisterOperateI(GeckoCode):
@@ -2428,6 +2466,13 @@ class GeckoRegisterOperateI(GeckoCode):
 
     def virtual_length(self) -> int:
         return 1
+
+    def as_bytes(self) -> bytes:
+        intType = GeckoCode.type_to_int(self.codetype)
+        metadata = (intType << 24) | (int(self._opType) << 20) | (
+            self._flags << 16) | self._register
+        info = self.value
+        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False)
 
 
 class GeckoRegisterOperate(GeckoCode):
@@ -2505,6 +2550,13 @@ class GeckoRegisterOperate(GeckoCode):
     def virtual_length(self) -> int:
         return 1
 
+    def as_bytes(self) -> bytes:
+        intType = GeckoCode.type_to_int(self.codetype)
+        metadata = (intType << 24) | (int(self._opType) << 20) | (
+            self._flags << 16) | self._register
+        info = self._other
+        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False)
+
 
 class MemoryCopyTo(GeckoCode):
     def __init__(self, value: int, size: int, otherRegister: int = 0xF,
@@ -2564,6 +2616,14 @@ class MemoryCopyTo(GeckoCode):
     def virtual_length(self) -> int:
         return 1
 
+    def as_bytes(self) -> bytes:
+        intType = GeckoCode.type_to_int(self.codetype) | (
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | (self._size << 8) | (
+            self._register << 4) | self._other
+        info = self.value
+        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False)
+
 
 class MemoryCopyFrom(GeckoCode):
     def __init__(self, value: int, size: int, otherRegister: int = 0xF,
@@ -2622,6 +2682,14 @@ class MemoryCopyFrom(GeckoCode):
 
     def virtual_length(self) -> int:
         return 1
+
+    def as_bytes(self) -> bytes:
+        intType = GeckoCode.type_to_int(self.codetype) | (
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | (self._size << 8) | (
+            self._register << 4) | self._other
+        info = self.value
+        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False)
 
 
 class GeckoIfEqual16(GeckoCode):
@@ -2684,6 +2752,16 @@ class GeckoIfEqual16(GeckoCode):
             code = GeckoCode.bytes_to_geckocode(f)
         self.add_child(code)
 
+    def as_bytes(self) -> bytes:
+        intType = GeckoCode.type_to_int(self.codetype) | (
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | self._address | (1 if self._endif else 0)
+        info = (self._other << 28) | (self._register << 24) | self._mask
+        body = b""
+        for code in self:
+            body += code.as_bytes()
+        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False) + body
+
 
 class GeckoIfNotEqual16(GeckoCode):
     def __init__(self, address: int = 0, register: int = 0, otherRegister: int = 15,
@@ -2744,6 +2822,16 @@ class GeckoIfNotEqual16(GeckoCode):
             self.add_child(code)
             code = GeckoCode.bytes_to_geckocode(f)
         self.add_child(code)
+
+    def as_bytes(self) -> bytes:
+        intType = GeckoCode.type_to_int(self.codetype) | (
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | self._address | (1 if self._endif else 0)
+        info = (self._other << 28) | (self._register << 24) | self._mask
+        body = b""
+        for code in self:
+            body += code.as_bytes()
+        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False) + body
 
 
 class GeckoIfGreaterThan16(GeckoCode):
@@ -2806,6 +2894,16 @@ class GeckoIfGreaterThan16(GeckoCode):
             code = GeckoCode.bytes_to_geckocode(f)
         self.add_child(code)
 
+    def as_bytes(self) -> bytes:
+        intType = GeckoCode.type_to_int(self.codetype) | (
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | self._address | (1 if self._endif else 0)
+        info = (self._other << 28) | (self._register << 24) | self._mask
+        body = b""
+        for code in self:
+            body += code.as_bytes()
+        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False) + body
+
 
 class GeckoIfLesserThan16(GeckoCode):
     def __init__(self, address: int = 0, register: int = 0, otherRegister: int = 15,
@@ -2867,6 +2965,16 @@ class GeckoIfLesserThan16(GeckoCode):
             code = GeckoCode.bytes_to_geckocode(f)
         self.add_child(code)
 
+    def as_bytes(self) -> bytes:
+        intType = GeckoCode.type_to_int(self.codetype) | (
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | self._address | (1 if self._endif else 0)
+        info = (self._other << 28) | (self._register << 24) | self._mask
+        body = b""
+        for code in self:
+            body += code.as_bytes()
+        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False) + body
+
 
 class GeckoIfLesserThan16(GeckoCode):
     def __init__(self, address: int = 0, register: int = 0, otherRegister: int = 15,
@@ -2927,6 +3035,16 @@ class GeckoIfLesserThan16(GeckoCode):
             self.add_child(code)
             code = GeckoCode.bytes_to_geckocode(f)
         self.add_child(code)
+
+    def as_bytes(self) -> bytes:
+        intType = GeckoCode.type_to_int(self.codetype) | (
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | self._address | (1 if self._endif else 0)
+        info = (self._other << 28) | (self._register << 24) | self._mask
+        body = b""
+        for code in self:
+            body += code.as_bytes()
+        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False) + body
 
 
 class CounterIfEqual16(GeckoCode):
@@ -2935,7 +3053,7 @@ class CounterIfEqual16(GeckoCode):
         self.value = value
         self._mask = mask
         self._flags = flags
-        self.counter = counter
+        self._counter = counter
         self._children = []
 
     def __len__(self) -> int:
@@ -2946,7 +3064,7 @@ class CounterIfEqual16(GeckoCode):
         ty = " (Resets counter if true)" if (self._flags &
                                              0x8) != 0 else " (Resets counter if false)"
         endif = "(Apply Endif) " if (self._flags & 0x1) != 0 else ""
-        return f"({intType:02X}) {endif}If (0x{self.value:04X} & ~0x{self._mask:04X}) is equal to {self.counter}, run the encapsulated codes{ty}"
+        return f"({intType:02X}) {endif}If (0x{self.value:04X} & ~0x{self._mask:04X}) is equal to {self._counter}, run the encapsulated codes{ty}"
 
     def __getitem__(self, index: int) -> GeckoCode:
         return self._children[index]
@@ -2992,6 +3110,15 @@ class CounterIfEqual16(GeckoCode):
             code = GeckoCode.bytes_to_geckocode(f)
         self.add_child(code)
 
+    def as_bytes(self) -> bytes:
+        intType = GeckoCode.type_to_int(self.codetype)
+        metadata = (intType << 24) | (self._counter << 4) | self._flags
+        info = (self._mask << 16) | self.value
+        body = b""
+        for code in self:
+            body += code.as_bytes()
+        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False) + body
+
 
 class CounterIfNotEqual16(GeckoCode):
     def __init__(self, value: int, mask: int = 0xFFFF,
@@ -2999,7 +3126,7 @@ class CounterIfNotEqual16(GeckoCode):
         self.value = value
         self._mask = mask
         self._flags = flags
-        self.counter = counter
+        self._counter = counter
         self._children = []
 
     def __len__(self) -> int:
@@ -3010,7 +3137,7 @@ class CounterIfNotEqual16(GeckoCode):
         ty = " (Resets counter if true)" if (self._flags &
                                              0x8) != 0 else " (Resets counter if false)"
         endif = "(Apply Endif) " if (self._flags & 0x1) != 0 else ""
-        return f"({intType:02X}) {endif}If (0x{self.value:04X} & ~0x{self._mask:04X}) is not equal to {self.counter}, run the encapsulated codes{ty}"
+        return f"({intType:02X}) {endif}If (0x{self.value:04X} & ~0x{self._mask:04X}) is not equal to {self._counter}, run the encapsulated codes{ty}"
 
     def __getitem__(self, index: int) -> GeckoCode:
         return self._children[index]
@@ -3056,6 +3183,15 @@ class CounterIfNotEqual16(GeckoCode):
             code = GeckoCode.bytes_to_geckocode(f)
         self.add_child(code)
 
+    def as_bytes(self) -> bytes:
+        intType = GeckoCode.type_to_int(self.codetype)
+        metadata = (intType << 24) | (self._counter << 4) | self._flags
+        info = (self._mask << 16) | self.value
+        body = b""
+        for code in self:
+            body += code.as_bytes()
+        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False) + body
+
 
 class CounterIfGreaterThan16(GeckoCode):
     def __init__(self, value: int, mask: int = 0xFFFF,
@@ -3063,7 +3199,7 @@ class CounterIfGreaterThan16(GeckoCode):
         self.value = value
         self._mask = mask
         self._flags = flags
-        self.counter = counter
+        self._counter = counter
         self._children = []
 
     def __len__(self) -> int:
@@ -3074,7 +3210,7 @@ class CounterIfGreaterThan16(GeckoCode):
         ty = " (Resets counter if true)" if (self._flags &
                                              0x8) != 0 else " (Resets counter if false)"
         endif = "(Apply Endif) " if (self._flags & 0x1) != 0 else ""
-        return f"({intType:02X}) {endif}If (0x{self.value:04X} & ~0x{self._mask:04X}) is greater than {self.counter}, run the encapsulated codes{ty}"
+        return f"({intType:02X}) {endif}If (0x{self.value:04X} & ~0x{self._mask:04X}) is greater than {self._counter}, run the encapsulated codes{ty}"
 
     def __getitem__(self, index: int) -> GeckoCode:
         return self._children[index]
@@ -3120,6 +3256,15 @@ class CounterIfGreaterThan16(GeckoCode):
             code = GeckoCode.bytes_to_geckocode(f)
         self.add_child(code)
 
+    def as_bytes(self) -> bytes:
+        intType = GeckoCode.type_to_int(self.codetype)
+        metadata = (intType << 24) | (self._counter << 4) | self._flags
+        info = (self._mask << 16) | self.value
+        body = b""
+        for code in self:
+            body += code.as_bytes()
+        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False) + body
+
 
 class CounterIfLesserThan16(GeckoCode):
     def __init__(self, value: int, mask: int = 0xFFFF,
@@ -3127,7 +3272,7 @@ class CounterIfLesserThan16(GeckoCode):
         self.value = value
         self._mask = mask
         self._flags = flags
-        self.counter = counter
+        self._counter = counter
         self._children = []
 
     def __len__(self) -> int:
@@ -3138,7 +3283,7 @@ class CounterIfLesserThan16(GeckoCode):
         ty = " (Resets counter if true)" if (self._flags &
                                              0x8) != 0 else " (Resets counter if false)"
         endif = "(Apply Endif) " if (self._flags & 0x1) != 0 else ""
-        return f"({intType:02X}) {endif}If (0x{self.value:04X} & ~0x{self._mask:04X}) is less than {self.counter}, run the encapsulated codes{ty}"
+        return f"({intType:02X}) {endif}If (0x{self.value:04X} & ~0x{self._mask:04X}) is less than {self._counter}, run the encapsulated codes{ty}"
 
     def __getitem__(self, index: int) -> GeckoCode:
         return self._children[index]
@@ -3184,6 +3329,15 @@ class CounterIfLesserThan16(GeckoCode):
             code = GeckoCode.bytes_to_geckocode(f)
         self.add_child(code)
 
+    def as_bytes(self) -> bytes:
+        intType = GeckoCode.type_to_int(self.codetype)
+        metadata = (intType << 24) | (self._counter << 4) | self._flags
+        info = (self._mask << 16) | self.value
+        body = b""
+        for code in self:
+            body += code.as_bytes()
+        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False) + body
+
 
 class AsmExecute(GeckoCode):
     def __init__(self, value: bytes):
@@ -3219,6 +3373,12 @@ class AsmExecute(GeckoCode):
 
     def virtual_length(self) -> int:
         return ((len(self) + 7) & -0x8) >> 3
+
+    def as_bytes(self) -> bytes:
+        intType = GeckoCode.type_to_int(self.codetype)
+        metadata = intType << 24
+        info = self.virtual_length()
+        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False) + _align_bytes(self.value, alignment=8)
 
 
 class AsmInsert(GeckoCode):
@@ -3260,6 +3420,13 @@ class AsmInsert(GeckoCode):
     def virtual_length(self) -> int:
         return ((len(self) + 7) & -0x8) >> 3
 
+    def as_bytes(self) -> bytes:
+        intType = GeckoCode.type_to_int(self.codetype) | (
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | self._address
+        info = self.virtual_length()
+        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False) + _align_bytes(self.value, alignment=8)
+
 
 class AsmInsertLink(GeckoCode):
     def __init__(self, value: bytes, address: int = 0, isPointer: bool = False):
@@ -3299,6 +3466,13 @@ class AsmInsertLink(GeckoCode):
 
     def virtual_length(self) -> int:
         return ((len(self) + 7) & -0x8) >> 3
+
+    def as_bytes(self) -> bytes:
+        intType = GeckoCode.type_to_int(self.codetype) | (
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | self._address
+        info = self.virtual_length()
+        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False) + _align_bytes(self.value, alignment=8)
 
 
 class WriteBranch(GeckoCode):
@@ -3357,6 +3531,13 @@ class WriteBranch(GeckoCode):
             return True
         return False
 
+    def as_bytes(self) -> bytes:
+        intType = GeckoCode.type_to_int(self.codetype) | (
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | self._address
+        info = self.value
+        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False)
+
 
 class Switch(GeckoCode):
     def __init__(self):
@@ -3375,6 +3556,9 @@ class Switch(GeckoCode):
 
     def virtual_length(self) -> int:
         return 1
+
+    def as_bytes(self) -> bytes:
+        return b"\xCC\x00\x00\x00\x00\x00\x00\x00"
 
 
 class AddressRangeCheck(GeckoCode):
@@ -3429,6 +3613,13 @@ class AddressRangeCheck(GeckoCode):
     def virtual_length(self) -> int:
         return 1
 
+    def as_bytes(self) -> bytes:
+        intType = GeckoCode.type_to_int(self.codetype) | (
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | self._endif
+        info = self.value
+        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False)
+
 
 class Terminator(GeckoCode):
     def __init__(self, value: int):
@@ -3479,11 +3670,18 @@ class Terminator(GeckoCode):
     def virtual_length(self) -> int:
         return 1
 
+    def as_bytes(self) -> bytes:
+        intType = GeckoCode.type_to_int(self.codetype) | (
+            0x10 if self._isPointer else 0)
+        metadata = intType << 24
+        info = self.value
+        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False)
+
 
 class Endif(GeckoCode):
     def __init__(self, value: int, asElse: bool = False, numEndifs: int = 0):
         self.value = value
-        self.asElse = asElse
+        self._asElse = asElse
         self._endifNum = numEndifs
 
     def __len__(self) -> int:
@@ -3493,7 +3691,7 @@ class Endif(GeckoCode):
         intType = GeckoCode.type_to_int(self.codetype)
         baStr = f" Set the base address to {self[0]}." if self[0] != 0 else ""
         poStr = f" Set the pointer address to {self[1]}." if self[1] != 0 else ""
-        elseStr = "Inverse the code execution status (else) " if self.asElse else ""
+        elseStr = "Inverse the code execution status (else) " if self._asElse else ""
         endif = "(Apply Endif) " if self._endifNum == 1 else f"(Apply {self._endifNum} Endifs) "
         return f"({intType:02X}) {endif}{elseStr}{baStr}{poStr}"
 
@@ -3533,6 +3731,12 @@ class Endif(GeckoCode):
     def virtual_length(self) -> int:
         return 1
 
+    def as_bytes(self) -> bytes:
+        intType = GeckoCode.type_to_int(self.codetype)
+        metadata = (intType << 24) | (self._asElse << 20) | self._endifNum
+        info = self.virtual_length()
+        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False)
+
 
 class Exit(GeckoCode):
     def __init__(self):
@@ -3552,12 +3756,15 @@ class Exit(GeckoCode):
     def virtual_length(self) -> int:
         return 1
 
+    def as_bytes(self) -> bytes:
+        return b"\xF0\x00\x00\x00\x00\x00\x00\x00"
+
 
 class AsmInsertXOR(GeckoCode):
     def __init__(self, value: bytes, address: int = 0, isPointer: bool = False, mask: int = 0, xorCount: int = 0):
         self.value = value
         self._mask = mask
-        self.xorCount = xorCount
+        self._xorCount = xorCount
         self._address = address
         self._isPointer = isPointer
 
@@ -3568,7 +3775,7 @@ class AsmInsertXOR(GeckoCode):
         intType = GeckoCode.type_to_int(self.codetype) + (
             2 if self._isPointer else 0)
         addrstr = "pointer address" if self._isPointer else "base address"
-        return f"({intType:02X}) Inject (b / b) the designated ASM at (0x{self._address:08X} + the {addrstr}) if the 16-bit value at the injection point (and {self.xorCount} additional values) XOR'ed equals 0x{self._mask:04X}"
+        return f"({intType:02X}) Inject (b / b) the designated ASM at (0x{self._address:08X} + the {addrstr}) if the 16-bit value at the injection point (and {self._xorCount} additional values) XOR'ed equals 0x{self._mask:04X}"
 
     def __getitem__(self, index: int) -> bytes:
         return self.value[index]
@@ -3594,12 +3801,21 @@ class AsmInsertXOR(GeckoCode):
     def virtual_length(self) -> int:
         return ((len(self) + 7) & -0x8) >> 3
 
+    def as_bytes(self) -> bytes:
+        intType = GeckoCode.type_to_int(self.codetype) + (
+            2 if self._isPointer else 0)
+        metadata = (intType << 24) | self._address
+        info = (self._xorCount << 24) | (
+            self._mask << 8) | self.virtual_length()
+        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False) + _align_bytes(self.value, alignment=8)
+
 
 class BrainslugSearch(GeckoCode):
-    def __init__(self, value: Union[int, bytes], address: int = 0, searchRange: Tuple[int, int] = [0x8000, 0x8180]):
+    def __init__(self, value: Union[int, bytes], address: int = 0, searchRange: Tuple[int, int] = [0x8000, 0x8180], numLines: int = 0):
         self.value = value
         self._address = address
-        self.searchRange = searchRange
+        self._searchRange = searchRange
+        self._count = numLines
         self._children = []
 
     def __len__(self) -> int:
@@ -3607,7 +3823,7 @@ class BrainslugSearch(GeckoCode):
 
     def __str__(self) -> str:
         intType = GeckoCode.type_to_int(self.codetype)
-        return f"({intType:02X}) If the linear data search finds a match between addresses 0x{(self.searchRange[0] & 0xFFFF) << 16} and 0x{(self.searchRange[1] & 0xFFFF) << 16}, set the pointer address to the beginning of the match and run the encapsulated codes"
+        return f"({intType:02X}) If the linear data search finds a match between addresses 0x{(self._searchRange[0] & 0xFFFF) << 16} and 0x{(self._searchRange[1] & 0xFFFF) << 16}, set the pointer address to the beginning of the match and run the encapsulated codes"
 
     def __getitem__(self, index: int) -> GeckoCode:
         return self._children[index]
@@ -3650,3 +3866,10 @@ class BrainslugSearch(GeckoCode):
             self.add_child(code)
             code = GeckoCode.bytes_to_geckocode(f)
         self.add_child(code)
+
+    def as_bytes(self) -> bytes:
+        intType = GeckoCode.type_to_int(self.codetype) | (
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | self._count
+        info = (self._searchRange[0] << 16) | self._searchRange
+        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False) + _align_bytes(self.value, alignment=8)
