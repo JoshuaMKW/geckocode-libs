@@ -1,11 +1,15 @@
-from typing import Iterable, List
+import sys
+from typing import IO, Iterable, List, TextIO
 
-from dolreader.dolfile import DolFile
+from dolreader.dol import DolFile
 
 from .geckocode import GeckoCode, InvalidGeckoCodeError
 
 
 class GCT(object):
+
+    MAGIC = b"\x00\xD0\xC0\xDE\x00\xD0\xC0\xDE"
+
     def __init__(self):
         self._codes: List[GeckoCode] = []
 
@@ -22,7 +26,7 @@ class GCT(object):
         self._iterpos = 0
         return self
 
-    def __next__(self):
+    def __next__(self) -> GeckoCode:
         try:
             self._iterpos += 1
             return self[self._iterpos-1]
@@ -41,6 +45,23 @@ class GCT(object):
 
     def __hash__(self) -> str:
         return "".join([str(c) for c in self])
+
+    @classmethod
+    def from_bytes(cls, f: IO) -> "GCT":
+        magic = f.read(8)
+        assert magic == GCT.MAGIC, f"GCT magic not found (0x{magic.hex()} != 0x{GCT.MAGIC.hex()})"
+
+        gct = cls()
+        while True:
+            try:
+                code = GeckoCode.bytes_to_geckocode(f)
+                gct.add_child(code)
+                if code.codetype == GeckoCode.Type.EXIT:
+                    break
+            except Exception:
+                break
+
+        return gct
 
     @property
     def children(self) -> Iterable[GeckoCode]:
@@ -70,4 +91,20 @@ class GCT(object):
         for code in self:
             packet += code.as_bytes()
         return start + packet + end
+
+    def as_text(self) -> str:
+        start = "00D0C0DE00D0C0DE"
+        end = "F000000000000000"
+        packet = ""
+        for code in self:
+            packet += code.as_text()
+        return start + packet + end
         
+    def print_map(self, buffer: TextIO = sys.stdout, indent: int = 2):
+        def printer(code: GeckoCode, indention: int):
+            print(" "*indention + str(code), file=buffer)
+            if GeckoCode.is_ifblock(code):
+                for child in code:
+                    printer(child, indention + indent)
+        for code in self:
+            printer(code, 0)

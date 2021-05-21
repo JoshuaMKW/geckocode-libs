@@ -127,3 +127,9 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Gecko Code Table
+*.gct
+
+# tests
+*test*
