@@ -4,7 +4,7 @@ from typing import Dict, Optional, Type
 
 from dolreader.dol import DolFile
 
-from .gct import GCT
+from .gct import GeckoCodeTable
 
 
 class CodeHandler(object):
@@ -18,14 +18,8 @@ class CodeHandler(object):
         WiiPADHook = b"\x3A\xB5\x00\x01\x3A\x73\x00\x0C\x2C\x15\x00\x04\x3B\x18\x00\x0C"
         GCNPADHook = b"\x3A\xB5\x00\x01\x2C\x15\x00\x04\x3B\x18\x00\x0C\x3B\xFF\x00\x0C"
 
-    class GeckoType(Enum):
-        LEGACY = 0
-        LATEST = 1
-
-    Version = GeckoType.LATEST
-
     def __init__(self): 
-        self.gct: GCT = None
+        self.gct: GeckoCodeTable = None
         self._populate_binaries()
         self.get_handler("dolphin")
 

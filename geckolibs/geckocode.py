@@ -1,9 +1,10 @@
 from io import BytesIO, StringIO
 
 from enum import Enum
-from typing import Any, BinaryIO, Iterable, List, TextIO, Tuple, Union
+from typing import Any, BinaryIO, Iterable, List, Optional, TextIO, Tuple, Union
 
 from dolreader.dol import DolFile
+from . import __version__
 
 
 def _align_bytes(_bytes: bytes, alignment: int = 4, fill: bytes = b"\x00") -> bytes:
@@ -24,6 +25,34 @@ class classproperty(property):
 
 
 class GeckoCommand(object):
+    """
+    Representation of a single command following the Gecko format.
+
+    Data:
+    `value`:                 Main value.
+    `codetype`:              `Type` of this `GeckoCommand`.
+    `children`:              Child `GeckoCommand`s of this `GeckoCommand` (or empty if not child carrying).
+
+    Static Methods:
+    `int_to_type`:           Return the casted `Type` of a `GeckoCommand` ID from int.
+    `type_to_int`:           Return the casted int of a `GeckoCommand` ID from `Type`.
+    `is_ifblock`:            Return if this `GeckoCommand` is a dynamic if type capable of holding children.
+    `is_multiline`:          Return if this `GeckoCommand` is multiple Gecko \"lines\" long.
+    `can_preprocess`:        Return if this `GeckoCommand` is capable of being directly patched into a DOL.
+    `assert_register`:       Assert that the int passed is a valid Gecko Register ID.
+    `typeof`:                Return the `Type` of the code given to this method.
+    `bytes_to_geckocommand`: Create and return a new `GeckoCommand` populated by the bytes given to this method.
+    `str_to_geckocommand`:   Create and return a new `GeckoCommand` populated by the text given to this method.
+
+    Methods:
+    `add_child`:             Add a `GeckoCommand` to this `GeckoCommand` (if applicable).
+    `remove_child`:          Remove a `GeckoCommand` from this `GeckoCommand` (if applicable).
+    `virtual_length`:        Returns the length of this `GeckoCommand` in Gecko \"lines\".
+    `apply`:                 Apply this `GeckoCommand` to the `DolFile` given to this method.
+    `apply_f`:               Apply this `GeckoCommand` to the DOL at the path given to this method.
+    `as_bytes`:              Returns the raw data representation of this `GeckoCommand`.
+    `as_text`:               Returns the textual representation of this `GeckoCommand`.
+    """
     class Type(Enum):
         WRITE_8 = 0x00
         WRITE_16 = 0x02
@@ -160,7 +189,7 @@ class GeckoCommand(object):
         }
 
     @staticmethod
-    def assertRegister(gr: int):
+    def assert_register(gr: int):
         assert 0 <= gr < 16, f"Only Gecko Registers 0-15 are allowed ({gr} is beyond range)"
 
     @staticmethod
@@ -981,17 +1010,17 @@ class GeckoCommand(object):
 
     def apply(self, dol: DolFile) -> bool:
         """Apply this GeckoCommand directly to a DOL if supported as abstracted with the DolFile class
-        
+
            Return True if the GeckoCommand is successfully applied"""
         return False
 
     def apply_f(self, dolpath: str) -> bool:
         """Apply this GeckoCommand directly to a DOL if supported as provided by a file path
-        
+
            Return True if the GeckoCommand is successfully applied"""
         with open(str(dolpath), "rb") as f:
             dol = DolFile(f)
-        
+
         success = self.apply(dol)
         if not success:
             return False
@@ -1970,7 +1999,7 @@ class IfLesserThan16(GeckoCommand):
 
 class BaseAddressLoad(GeckoCommand):
     def __init__(self, value: int, flags: int = 0, register: int = 0, isPointer: bool = False):
-        GeckoCommand.assertRegister(register)
+        GeckoCommand.assert_register(register)
 
         self.value = value
         self._flags = flags
@@ -2045,7 +2074,7 @@ class BaseAddressLoad(GeckoCommand):
 
 class BaseAddressSet(GeckoCommand):
     def __init__(self, value: int, flags: int = 0, register: int = 0, isPointer: bool = False):
-        GeckoCommand.assertRegister(register)
+        GeckoCommand.assert_register(register)
 
         self.value = value
         self._flags = flags
@@ -2121,7 +2150,7 @@ class BaseAddressSet(GeckoCommand):
 
 class BaseAddressStore(GeckoCommand):
     def __init__(self, value: int, flags: int = 0, register: int = 0, isPointer: bool = False):
-        GeckoCommand.assertRegister(register)
+        GeckoCommand.assert_register(register)
 
         self.value = value
         self._flags = flags
@@ -2239,7 +2268,7 @@ class BaseAddressGetNext(GeckoCommand):
 
 class PointerAddressLoad(GeckoCommand):
     def __init__(self, value: int, flags: int = 0, register: int = 0, isPointer: bool = False):
-        GeckoCommand.assertRegister(register)
+        GeckoCommand.assert_register(register)
 
         self.value = value
         self._flags = flags
@@ -2314,7 +2343,7 @@ class PointerAddressLoad(GeckoCommand):
 
 class PointerAddressSet(GeckoCommand):
     def __init__(self, value: int, flags: int = 0, register: int = 0, isPointer: bool = False):
-        GeckoCommand.assertRegister(register)
+        GeckoCommand.assert_register(register)
 
         self.value = value
         self._flags = flags
@@ -2390,7 +2419,7 @@ class PointerAddressSet(GeckoCommand):
 
 class PointerAddressStore(GeckoCommand):
     def __init__(self, value: int, flags: int = 0, register: int = 0, isPointer: bool = False):
-        GeckoCommand.assertRegister(register)
+        GeckoCommand.assert_register(register)
 
         self.value = value
         self._flags = flags
@@ -2652,7 +2681,7 @@ class Gosub(GeckoCommand):
 
 class GeckoRegisterSet(GeckoCommand):
     def __init__(self, value: int, flags: int = 0, register: int = 0, isPointer: bool = False):
-        GeckoCommand.assertRegister(register)
+        GeckoCommand.assert_register(register)
 
         self.value = value
         self._flags = flags
@@ -2720,7 +2749,7 @@ class GeckoRegisterSet(GeckoCommand):
 
 class GeckoRegisterLoad(GeckoCommand):
     def __init__(self, value: int, flags: int = 0, register: int = 0, isPointer: bool = False):
-        GeckoCommand.assertRegister(register)
+        GeckoCommand.assert_register(register)
 
         self.value = value
         self._flags = flags
@@ -2793,7 +2822,7 @@ class GeckoRegisterLoad(GeckoCommand):
 class GeckoRegisterStore(GeckoCommand):
     def __init__(self, value: int, repeat: int = 0, flags: int = 0,
                  register: int = 0, valueSize: int = 0, isPointer: bool = False):
-        GeckoCommand.assertRegister(register)
+        GeckoCommand.assert_register(register)
 
         self.value = value
         self._valueSize = valueSize
@@ -2870,7 +2899,7 @@ class GeckoRegisterStore(GeckoCommand):
 
 class GeckoRegisterOperateI(GeckoCommand):
     def __init__(self, value: int, opType: GeckoCommand.ArithmeticType, flags: int = 0, register: int = 0):
-        GeckoCommand.assertRegister(register)
+        GeckoCommand.assert_register(register)
 
         self.value = value
         self._opType = opType
@@ -2952,8 +2981,8 @@ class GeckoRegisterOperateI(GeckoCommand):
 
 class GeckoRegisterOperate(GeckoCommand):
     def __init__(self, otherRegister: int, opType: GeckoCommand.ArithmeticType, flags: int = 0, register: int = 0):
-        GeckoCommand.assertRegister(register)
-        GeckoCommand.assertRegister(otherRegister)
+        GeckoCommand.assert_register(register)
+        GeckoCommand.assert_register(otherRegister)
 
         self._opType = opType
         self._register = register
@@ -3036,8 +3065,8 @@ class GeckoRegisterOperate(GeckoCommand):
 class MemoryCopyTo(GeckoCommand):
     def __init__(self, value: int, size: int, otherRegister: int = 0xF,
                  register: int = 0, isPointer: bool = False):
-        GeckoCommand.assertRegister(register)
-        GeckoCommand.assertRegister(otherRegister)
+        GeckoCommand.assert_register(register)
+        GeckoCommand.assert_register(otherRegister)
 
         self.value = value
         self._size = size
@@ -3103,8 +3132,8 @@ class MemoryCopyTo(GeckoCommand):
 class MemoryCopyFrom(GeckoCommand):
     def __init__(self, value: int, size: int, otherRegister: int = 0xF,
                  register: int = 0, isPointer: bool = False):
-        GeckoCommand.assertRegister(register)
-        GeckoCommand.assertRegister(otherRegister)
+        GeckoCommand.assert_register(register)
+        GeckoCommand.assert_register(otherRegister)
 
         self.value = value
         self._size = size
@@ -3170,8 +3199,8 @@ class MemoryCopyFrom(GeckoCommand):
 class GeckoIfEqual16(GeckoCommand):
     def __init__(self, address: int = 0, register: int = 0, otherRegister: int = 15,
                  isPointer: bool = False, endif: bool = False, mask: int = 0xFFFF):
-        GeckoCommand.assertRegister(register)
-        GeckoCommand.assertRegister(otherRegister)
+        GeckoCommand.assert_register(register)
+        GeckoCommand.assert_register(otherRegister)
 
         self._mask = mask
         self._address = address
@@ -3242,8 +3271,8 @@ class GeckoIfEqual16(GeckoCommand):
 class GeckoIfNotEqual16(GeckoCommand):
     def __init__(self, address: int = 0, register: int = 0, otherRegister: int = 15,
                  isPointer: bool = False, endif: bool = False, mask: int = 0xFFFF):
-        GeckoCommand.assertRegister(register)
-        GeckoCommand.assertRegister(otherRegister)
+        GeckoCommand.assert_register(register)
+        GeckoCommand.assert_register(otherRegister)
 
         self._mask = mask
         self._address = address
@@ -3314,8 +3343,8 @@ class GeckoIfNotEqual16(GeckoCommand):
 class GeckoIfGreaterThan16(GeckoCommand):
     def __init__(self, address: int = 0, register: int = 0, otherRegister: int = 15,
                  isPointer: bool = False, endif: bool = False, mask: int = 0xFFFF):
-        GeckoCommand.assertRegister(register)
-        GeckoCommand.assertRegister(otherRegister)
+        GeckoCommand.assert_register(register)
+        GeckoCommand.assert_register(otherRegister)
 
         self._mask = mask
         self._address = address
@@ -3386,8 +3415,8 @@ class GeckoIfGreaterThan16(GeckoCommand):
 class GeckoIfLesserThan16(GeckoCommand):
     def __init__(self, address: int = 0, register: int = 0, otherRegister: int = 15,
                  isPointer: bool = False, endif: bool = False, mask: int = 0xFFFF):
-        GeckoCommand.assertRegister(register)
-        GeckoCommand.assertRegister(otherRegister)
+        GeckoCommand.assert_register(register)
+        GeckoCommand.assert_register(otherRegister)
 
         self._mask = mask
         self._address = address
@@ -4281,14 +4310,42 @@ class BrainslugSearch(GeckoCommand):
 
 
 class GeckoCode(object):
+    """
+    A class representing the popular \"GCT\" format used for applying patches to a Gamecube/Wii game.
+
+    Data:\n
+    `name`:                  The name of this `GeckoCode`.
+    `author`:                The name of this `GeckoCode`'s author.
+    `desc`:                  The description of this `GeckoCode`.
+
+    Static Methods:\n
+    `from_data`:             Create and return a new `GeckoCode` that is populated using the bytes given to this method.
+    `from_text`:             Create and return a new `GeckoCode` that is populated using the text given to this method.
+
+    Methods:\n
+    `add_child`:             Add a `GeckoCommand` to this GeckoCode.
+    `remove_child`:          Remove a `GeckoCommand` from this GeckoCode.
+    `set_enabled`:           Set if this `GeckoCode` is enabled or not.
+    `is_enabled`:            Return if this `GeckoCode` is enabled or not.
+    `is_equal_body`:         Return if the commands in this GeckoCode are the same as the other.
+    `virtual_length`:        Returns the length of this GeckoCode in Gecko \"lines\".
+    `apply`:                 Apply this GeckoCode to the `DolFile` given to this method.
+    `apply_f`:               Apply this GeckoCode to the DOL at the path given to this method.
+    `as_bytes`:              Returns the raw data representation of this `GeckoCode`.
+    `as_text`:               Returns the textual representation of this `GeckoCode`.
+    """
+
     name: str
     author: str
     desc: str
 
-    def __init__(self, name: str, author: str, desc: str, commands: Union[List[GeckoCommand], GeckoCommand] = []):
+    _TmpNameCounter = 0
+
+    def __init__(self, name: str, author: str, desc: str, commands: Union[List[GeckoCommand], GeckoCommand] = [], enabled: bool = True):
         self.name = name
         self.author = author
         self.desc = desc
+        self._enabled = enabled
         if isinstance(commands, GeckoCommand):
             self._commands = [commands]
         else:
@@ -4303,26 +4360,115 @@ class GeckoCode(object):
     def __str__(self) -> str:
         return f"{self.name.strip()} [{self.author.strip()}]\n  {'\n  '.join(self.desc.strip().split('\n'))}"
 
-    def add_command(self, command: GeckoCommand):
+    def __iter__(self):
+        self._iterpos = 0
+        return self
+
+    def __next__(self) -> GeckoCommand:
+        try:
+            self._iterpos += 1
+            return self[self._iterpos-1]
+        except IndexError:
+            raise StopIteration
+
+    def __getitem__(self, index: int) -> GeckoCommand:
+        return self._commands[index]
+
+    def __setitem__(self, index: int, value: GeckoCommand):
+        if not isinstance(value, GeckoCommand):
+            raise InvalidGeckoCommandError(
+                f"Cannot assign {value.__class__.__name__} as a child of {self.__class__.__name__}")
+
+        self._commands[index] = value
+
+    def __hash__(self) -> str:
+        return sum([ord(c) for c in str(self)]) + sum([hash(command) for command in self._commands])
+
+    def __eq__(self, other: "GeckoCode") -> bool:
+        return hash(self) == hash(other)
+
+    def __ne__(self, other: "GeckoCode") -> bool:
+        return hash(self) != hash(other)
+
+    def __iadd__(self, other: GeckoCommand):
+        if isinstance(other, GeckoCommand):
+            self.add_child(other)
+        else:
+            raise TypeError(
+                f"{other.__class__.__name__} cannot be added to a {self.__class__.__name__}")
+
+    @classmethod
+    def from_bytes(cls, f: Union[BinaryIO, bytes], name: Optional[str] = None, author: Optional[str] = None, desc: Optional[str] = None, enabled: bool = True) -> "GeckoCode":
+        if isinstance(f, bytes):
+            f = BytesIO(f)
+
+        code = cls(f"GeckoCode_{GeckoCode._TmpNameCounter}" if name is None else name,
+                   f"geckocode-libs v{__version__}" if author is None else author,
+                   "Generated from raw data" if desc is None else desc,
+                   enabled)
+        GeckoCode._TmpNameCounter += 1
+
+        while True:
+            try:
+                command = GeckoCommand.bytes_to_geckocommand(f)
+                if command.codetype == GeckoCommand.Type.EXIT:
+                    break
+                code.add_child(command)
+            except Exception:
+                break
+
+        return code
+
+    @classmethod
+    def from_text(cls, f: Union[TextIO, str], name: Optional[str] = None, author: Optional[str] = None, desc: Optional[str] = None, enabled: bool = True) -> "GeckoCode":
+        if isinstance(f, str):
+            f = StringIO(f)
+
+        code = cls(f"GeckoCode_{GeckoCode._TmpNameCounter}" if name is None else name,
+                   f"geckocode-libs v{__version__}" if author is None else author,
+                   "Generated from text" if desc is None else desc,
+                   enabled)
+        while True:
+            try:
+                command = GeckoCommand.str_to_geckocommand(f)
+                code.add_child(command)
+                if command.codetype == GeckoCommand.Type.EXIT:
+                    break
+            except Exception:
+                break
+
+        return code
+
+    @property
+    def children(self) -> Iterable[GeckoCommand]:
+        for command in self._commands:
+            yield command
+
+    def add_child(self, command: GeckoCommand):
         """Add a GeckoCommand to this GeckoCode"""
         self._commands.append(command)
 
-    def remove_command(self, command: GeckoCommand):
+    def remove_child(self, command: GeckoCommand):
         """Remove a GeckoCommand from this GeckoCode"""
         self._commands.remove(command)
-    
-    def iter_commands(self) -> Iterable[GeckoCommand]:
-        """Iterate through each command"""
-        for command in self._commands:
-            yield command
+
+    def set_enabled(self, enabled: bool):
+        self._enabled = enabled
+
+    def is_enabled(self) -> bool:
+        return self._enabled
+
+    def is_equal_body(self, other: "GeckoCode") -> bool:
+        """Return if the commands in this GeckoCode are the same as the other"""
+        return sum([hash(command) for command in self._commands]) == sum([hash(command) for command in other])
 
     def virtual_length(self) -> int:
         """Return the length of this GeckoCode in Gecko \"lines\""""
         return sum([command.virtual_length() for command in self._commands])
 
     def apply(self, dol: DolFile) -> bool:
-        """Apply this GeckoCode directly to a DOL if supported as provided by a file path
-        
+        """Apply this GeckoCode directly to a DOL if supported as provided by a `DolFile`
+
            Return True if the command is successfully applied"""
         status = False
         for command in self._commands:
@@ -4331,11 +4477,11 @@ class GeckoCode(object):
 
     def apply_f(self, dolpath: str) -> bool:
         """Apply this GeckoCode directly to a DOL if supported as provided by a file path
-        
+
            Return True if the command is successfully applied"""
         with open(str(dolpath), "rb") as f:
             dol = DolFile(f)
-        
+
         success = self.apply(dol)
         if not success:
             return False
@@ -4354,8 +4500,7 @@ class GeckoCode(object):
 
     def as_text(self) -> str:
         """Return this GeckoCode as its textual form (As generally found in documentation)"""
-        info = f"{self.name.strip()} [{self.author.strip()}]"
         data = ""
         for command in self._commands:
             data += f"{command.as_text()}\n"
-        return f"{info}\n{data.rstrip()}\n{self.desc.rstrip()}"
+        return data.rstrip()
