@@ -6,7 +6,7 @@ from typing import BinaryIO, Dict, Iterable, List, TextIO, Union
 
 from dolreader.dol import DolFile
 
-from .geckocode import GeckoCode, GeckoCommand, InvalidGeckoCommandError
+from .geckocode import Exit, GeckoCode, GeckoCommand, InvalidGeckoCommandError
 
 
 class GeckoTextType(Enum):
@@ -67,7 +67,7 @@ class GeckoCodeTable(object):
     def __next__(self) -> GeckoCode:
         try:
             self._iterpos += 1
-            return self._codes.values()[self._iterpos-1]
+            return list(self._codes.values())[self._iterpos-1]
         except IndexError:
             raise StopIteration
 
@@ -147,11 +147,16 @@ class GeckoCodeTable(object):
         mode = GeckoCodeTable.detect_codelist_type(f)
         if mode == GeckoTextType.DOLPHIN:
             f.seek(0)
-            for line in f.readlines():
+            while True:
+                line = f.readline().strip()
                 if line == "[Gecko_Enabled]":
-                    while (name := f.readline()).startswith("$"):
-                        enabledCodes.add(name[1:].strip())
+                    line = f.readline().strip()
+                    while line.startswith("$"):
+                        enabledCodes.add(line[1:].strip())
+                        line = f.readline().strip()
                     break
+
+        f.seek(0)
 
         data = ""
         name = ""
@@ -167,23 +172,24 @@ class GeckoCodeTable(object):
                 if line == "":
                     continue
                 elif line.startswith("$"):
-                    n = line[::-1].find("[") - 1
-                    name = line[:n].lstrip("$").strip()
-                    author = line[n+1:-1].strip()
-                    while True:
-                        line = f.readline().strip()
-                        if line.startswith("*"):
-                            desc += f"{line[1:].strip()}\n"
-                        elif line != "":
-                            data += f"{line}\n"
-                        else:
-                            gct.add_child(GeckoCode.from_text(
-                                data.rstrip(), name, author, desc))
-                            data = ""
-                            name = ""
-                            author = ""
-                            desc = ""
-                            break
+                    if data != "":
+                        code = GeckoCode.from_text(
+                            data.rstrip(), name, author, desc[:-1], enabled=(name in enabledCodes))
+                        gct.add_child(code)
+                        data = ""
+                        desc = ""
+                    n = line[::-1].find("[") + 1
+                    if n == 0:
+                        name = line[1:]
+                        author = None
+                    else:
+                        name = line[1:-n].strip()
+                        author = line[-n+1:-1].strip()
+                elif line.startswith("*"):
+                    desc += f"{line[1:].strip()}\n"
+                else:
+                    if "".join(line.split()).isalnum():
+                        data += f"{line}\n"
             elif mode == GeckoTextType.OCARINA:
                 if line == "":
                     continue
@@ -192,9 +198,9 @@ class GeckoCodeTable(object):
                     gct.gameName = f.readline().strip()
                     continue
 
-                n = line[::-1].find("[") - 1
-                name = line[:n].lstrip("$").strip()
-                author = line[n+1:-1].strip()
+                n = line[::-1].find("[") + 1
+                name = line[1:-n].strip()
+                author = line[-n+1:-1].strip()
                 while True:
                     if line.startswith("*"):
                         data += f"{line[1:].strip()}\n"
@@ -293,14 +299,27 @@ class GeckoCodeTable(object):
             codelist = "[Gecko]\n"
             enableds = "[Gecko_Enabled]\n"
             for code in self:
-                codelist += f"${code.name} [{code.author}]\n{code.as_text()}\n*{'\n*'.join(code.desc.split('\n'))}\n"
+                author = ""
+                desc = ""
+                if code.author:
+                    author = f" [{code.author}]"
+                if code.desc:
+                    desc = "*" + "\n*".join(code.desc.split("\n"))
+                codelist += f"${code.name}{author}\n{code.as_text()}\n{desc}\n"
                 if code.is_enabled():
                     enableds += f"${code.name}\n"
             return f"{codelist}{enableds.rstrip()}"
         elif ty == GeckoTextType.OCARINA:
             codelist = f"{self.gameID.strip()}\n{self.gameName.strip()}\n\n"
             for code in self:
-                codelist += f"{code.name} [{code.author}]\n* {'\n* '.join(code.as_text().split('\n'))}\n{code.desc}\n"
+                author = ""
+                desc = ""
+                if code.author:
+                    author = f" [{code.author}]"
+                if code.desc:
+                    desc = "\n*".join(code.desc.split("\n"))
+                data = '\n* '.join(code.as_text().split('\n'))
+                codelist += f"{code.name}{author}\n* {data}\n{desc}\n"
             return codelist.rstrip()
         else:
             codelist = ""
@@ -312,9 +331,10 @@ class GeckoCodeTable(object):
         """Print a human readable indented map of this GCT"""
         def printer(command: GeckoCommand, indention: int):
             print(" "*indention + str(command), file=buffer)
-            if command.is_ifblock():
+            if GeckoCommand.is_ifblock(command):
                 for child in command:
                     printer(child, indention + indent)
         for code in self:
             for command in code:
                 printer(command, 0)
+        print(str(Exit()), file=buffer)
