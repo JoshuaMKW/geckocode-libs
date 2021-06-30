@@ -1018,7 +1018,7 @@ class GeckoCommand(object):
     def value(self, value: Union[int, bytes]):
         pass
 
-    def add_child(self, child: "GeckoCommand"):
+    def add_child(self, child: "GeckoCommand", index: int = -1):
         """Add a child command to this GeckoCommand"""
         pass
 
@@ -1468,8 +1468,11 @@ class IfEqual32(GeckoCommand):
             value = int.from_bytes(value, "big", signed=False)
         self._value = value & 0xFFFFFFFF
 
-    def add_child(self, child: "GeckoCommand"):
-        self._children.append(child)
+    def add_child(self, child: "GeckoCommand", index: int = -1):
+        if index < 0:
+            self._children.append(child)
+        else:
+            self._children.insert(index, child)
 
     def remove_child(self, child: "GeckoCommand"):
         self._children.remove(child)
@@ -1543,8 +1546,11 @@ class IfNotEqual32(GeckoCommand):
             value = int.from_bytes(value, "big", signed=False)
         self._value = value & 0xFFFFFFFF
 
-    def add_child(self, child: "GeckoCommand"):
-        self._children.append(child)
+    def add_child(self, child: "GeckoCommand", index: int = -1):
+        if index < 0:
+            self._children.append(child)
+        else:
+            self._children.insert(index, child)
 
     def remove_child(self, child: "GeckoCommand"):
         self._children.remove(child)
@@ -1618,8 +1624,11 @@ class IfGreaterThan32(GeckoCommand):
             value = int.from_bytes(value, "big", signed=False)
         self._value = value & 0xFFFFFFFF
 
-    def add_child(self, child: "GeckoCommand"):
-        self._children.append(child)
+    def add_child(self, child: "GeckoCommand", index: int = -1):
+        if index < 0:
+            self._children.append(child)
+        else:
+            self._children.insert(index, child)
 
     def remove_child(self, child: "GeckoCommand"):
         self._children.remove(child)
@@ -1693,8 +1702,11 @@ class IfLesserThan32(GeckoCommand):
             value = int.from_bytes(value, "big", signed=False)
         self._value = value & 0xFFFFFFFF
 
-    def add_child(self, child: "GeckoCommand"):
-        self._children.append(child)
+    def add_child(self, child: "GeckoCommand", index: int = -1):
+        if index < 0:
+            self._children.append(child)
+        else:
+            self._children.insert(index, child)
 
     def remove_child(self, child: "GeckoCommand"):
         self._children.remove(child)
@@ -1769,8 +1781,11 @@ class IfEqual16(GeckoCommand):
             value = int.from_bytes(value, "big", signed=False)
         self._value = value & 0xFFFF
 
-    def add_child(self, child: "GeckoCommand"):
-        self._children.append(child)
+    def add_child(self, child: "GeckoCommand", index: int = -1):
+        if index < 0:
+            self._children.append(child)
+        else:
+            self._children.insert(index, child)
 
     def remove_child(self, child: "GeckoCommand"):
         self._children.remove(child)
@@ -1845,8 +1860,11 @@ class IfNotEqual16(GeckoCommand):
             value = int.from_bytes(value, "big", signed=False)
         self._value = value & 0xFFFF
 
-    def add_child(self, child: "GeckoCommand"):
-        self._children.append(child)
+    def add_child(self, child: "GeckoCommand", index: int = -1):
+        if index < 0:
+            self._children.append(child)
+        else:
+            self._children.insert(index, child)
 
     def remove_child(self, child: "GeckoCommand"):
         self._children.remove(child)
@@ -1921,8 +1939,11 @@ class IfGreaterThan16(GeckoCommand):
             value = int.from_bytes(value, "big", signed=False)
         self._value = value & 0xFFFF
 
-    def add_child(self, child: "GeckoCommand"):
-        self._children.append(child)
+    def add_child(self, child: "GeckoCommand", index: int = -1):
+        if index < 0:
+            self._children.append(child)
+        else:
+            self._children.insert(index, child)
 
     def remove_child(self, child: "GeckoCommand"):
         self._children.remove(child)
@@ -1997,8 +2018,11 @@ class IfLesserThan16(GeckoCommand):
             value = int.from_bytes(value, "big", signed=False)
         self._value = value & 0xFFFF
 
-    def add_child(self, child: "GeckoCommand"):
-        self._children.append(child)
+    def add_child(self, child: "GeckoCommand", index: int = -1):
+        if index < 0:
+            self._children.append(child)
+        else:
+            self._children.insert(index, child)
 
     def remove_child(self, child: "GeckoCommand"):
         self._children.remove(child)
@@ -3268,8 +3292,11 @@ class GeckoIfEqual16(GeckoCommand):
     def codetype(cls) -> GeckoCommand.Type:
         return GeckoCommand.Type.GECKO_IF_EQ_16
 
-    def add_child(self, child: "GeckoCommand"):
-        self._children.append(child)
+    def add_child(self, child: "GeckoCommand", index: int = -1):
+        if index < 0:
+            self._children.append(child)
+        else:
+            self._children.insert(index, child)
 
     def remove_child(self, child: "GeckoCommand"):
         self._children.remove(child)
@@ -3340,8 +3367,11 @@ class GeckoIfNotEqual16(GeckoCommand):
     def codetype(cls) -> GeckoCommand.Type:
         return GeckoCommand.Type.GECKO_IF_NEQ_16
 
-    def add_child(self, child: "GeckoCommand"):
-        self._children.append(child)
+    def add_child(self, child: "GeckoCommand", index: int = -1):
+        if index < 0:
+            self._children.append(child)
+        else:
+            self._children.insert(index, child)
 
     def remove_child(self, child: "GeckoCommand"):
         self._children.remove(child)
@@ -3412,8 +3442,11 @@ class GeckoIfGreaterThan16(GeckoCommand):
     def codetype(cls) -> GeckoCommand.Type:
         return GeckoCommand.Type.GECKO_IF_GT_16
 
-    def add_child(self, child: "GeckoCommand"):
-        self._children.append(child)
+    def add_child(self, child: "GeckoCommand", index: int = -1):
+        if index < 0:
+            self._children.append(child)
+        else:
+            self._children.insert(index, child)
 
     def remove_child(self, child: "GeckoCommand"):
         self._children.remove(child)
@@ -3484,8 +3517,11 @@ class GeckoIfLesserThan16(GeckoCommand):
     def codetype(cls) -> GeckoCommand.Type:
         return GeckoCommand.Type.GECKO_IF_LT_16
 
-    def add_child(self, child: "GeckoCommand"):
-        self._children.append(child)
+    def add_child(self, child: "GeckoCommand", index: int = -1):
+        if index < 0:
+            self._children.append(child)
+        else:
+            self._children.insert(index, child)
 
     def remove_child(self, child: "GeckoCommand"):
         self._children.remove(child)
@@ -3559,8 +3595,11 @@ class CounterIfEqual16(GeckoCommand):
             value = int.from_bytes(value, "big", signed=False)
         self._value = value & 0xFFFF
 
-    def add_child(self, child: "GeckoCommand"):
-        self._children.append(child)
+    def add_child(self, child: "GeckoCommand", index: int = -1):
+        if index < 0:
+            self._children.append(child)
+        else:
+            self._children.insert(index, child)
 
     def remove_child(self, child: "GeckoCommand"):
         self._children.remove(child)
@@ -3632,8 +3671,11 @@ class CounterIfNotEqual16(GeckoCommand):
             value = int.from_bytes(value, "big", signed=False)
         self._value = value & 0xFFFF
 
-    def add_child(self, child: "GeckoCommand"):
-        self._children.append(child)
+    def add_child(self, child: "GeckoCommand", index: int = -1):
+        if index < 0:
+            self._children.append(child)
+        else:
+            self._children.insert(index, child)
 
     def remove_child(self, child: "GeckoCommand"):
         self._children.remove(child)
@@ -3705,8 +3747,11 @@ class CounterIfGreaterThan16(GeckoCommand):
             value = int.from_bytes(value, "big", signed=False)
         self._value = value & 0xFFFF
 
-    def add_child(self, child: "GeckoCommand"):
-        self._children.append(child)
+    def add_child(self, child: "GeckoCommand", index: int = -1):
+        if index < 0:
+            self._children.append(child)
+        else:
+            self._children.insert(index, child)
 
     def remove_child(self, child: "GeckoCommand"):
         self._children.remove(child)
@@ -3778,8 +3823,11 @@ class CounterIfLesserThan16(GeckoCommand):
             value = int.from_bytes(value, "big", signed=False)
         self._value = value & 0xFFFF
 
-    def add_child(self, child: "GeckoCommand"):
-        self._children.append(child)
+    def add_child(self, child: "GeckoCommand", index: int = -1):
+        if index < 0:
+            self._children.append(child)
+        else:
+            self._children.insert(index, child)
 
     def remove_child(self, child: "GeckoCommand"):
         self._children.remove(child)
@@ -4323,8 +4371,11 @@ class BrainslugSearch(GeckoCommand):
     def value(self, value: bytes):
         self._value = value
 
-    def add_child(self, child: "GeckoCommand"):
-        self._children.append(child)
+    def add_child(self, child: "GeckoCommand", index: int = -1):
+        if index < 0:
+            self._children.append(child)
+        else:
+            self._children.insert(index, child)
 
     def remove_child(self, child: "GeckoCommand"):
         self._children.remove(child)
