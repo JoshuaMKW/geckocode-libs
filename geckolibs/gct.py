@@ -193,8 +193,8 @@ class GeckoCodeTable(object):
                     if "".join(sLine.split()).isalnum():
                         data.append(sLine)
             elif mode == GeckoTextType.OCARINA:
-                print(line)
-                if line == "":
+                print(sLine)
+                if sLine == "":
                     name = ""
                     author = ""
                     desc.clear()
@@ -203,17 +203,22 @@ class GeckoCodeTable(object):
                 elif not _gameInfoCollected:
                     gct.gameID = line.strip()
                     gct.gameName = f.readline().strip()
+                    _gameInfoCollected = True
                     continue
 
-                n = line[::-1].find("[") + 1
-                name = line[1:-n].strip()
-                author = line[-n+1:-1].strip()
-                print(n, name, author)
+                n = sLine[::-1].find("[") + 1
+                if n == 0:
+                    name = sLine
+                    author = None
+                else:
+                    name = sLine[:-n].strip()
+                    author = sLine[-n+1:-1].strip()
                 while True:
-                    if line.startswith("*"):
-                        data.append(f"{line[1:].strip()}")
-                    elif line != "":
-                        desc.append(line)
+                    sLine = f.readline().strip()
+                    if sLine.startswith("*"):
+                        data.append(f"{sLine[1:].strip()}")
+                    elif sLine != "":
+                        desc.append(sLine)
                     else:
                         gct.add_child(GeckoCode.from_text(
                             "\n".join(data), name, author, "\n".join(desc)))
@@ -312,7 +317,6 @@ class GeckoCodeTable(object):
                 if code.author:
                     author = f" [{code.author}]"
                 if code.desc:
-                    print(code.desc.split("\n"))
                     desc = "*" + "\n*".join(code.desc.split("\n")) + "\n"
                 codelist += f"${code.name}{author}\n{code.as_text()}\n{desc}"
                 if code.is_enabled():
@@ -326,7 +330,7 @@ class GeckoCodeTable(object):
                 if code.author:
                     author = f" [{code.author}]"
                 if code.desc:
-                    desc = "\n*".join(code.desc.split("\n"))
+                    desc = code.desc + "\n"
                 data = '\n* '.join(code.as_text().split('\n'))
                 codelist += f"{code.name}{author}\n* {data}\n{desc}\n"
             return codelist.rstrip()

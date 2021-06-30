@@ -583,6 +583,7 @@ class GeckoCommand(object):
             f = StringIO(f)
 
         line = f.readline().strip()
+        print(line)
         metadata = bytes.fromhex(line[:8])
 
         address = int.from_bytes(
@@ -607,8 +608,15 @@ class GeckoCommand(object):
             value = int.from_bytes(info, "big", signed=False)
             return Write32(value, address, isPointerType)
         elif codetype == GeckoCommand.Type.WRITE_STR:
-            size = int.from_bytes(line[-8:], "big", signed=False)
-            return WriteString(f.read(size), address, isPointerType)
+            info = bytes.fromhex(line[-8:])
+            size = int.from_bytes(info, "big", signed=False)
+            data = b""
+            for _ in range(((size + 7) & -8) >> 3):
+                data += bytes.fromhex("".join(f.readline().strip().split()))
+            diff = size - len(data)
+            if diff != 0:
+                data = data[:size - len(data)]
+            return WriteString(data, address, isPointerType)
         elif codetype == GeckoCommand.Type.WRITE_SERIAL:
             info = bytes.fromhex("".join(f.readline().strip().split()))
             value = int.from_bytes(info[:4], "big", signed=False)
@@ -4454,6 +4462,8 @@ class GeckoCode(object):
                    desc,
                    enabled=enabled)
         GeckoCode._TmpNameCounter += 1
+
+        print(f.getvalue())
 
         while f.tell() < len(f.getvalue()):
             command = GeckoCommand.str_to_geckocommand(f)
