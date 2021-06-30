@@ -203,16 +203,13 @@ class GeckoCommand(object):
 
     @staticmethod
     def bytes_to_geckocommand(f: Union[BinaryIO, bytes]) -> "GeckoCommand":
-        def add_children_till_terminator(code: "GeckoCommand", f: BinaryIO):
-            while True:
-                try:
-                    child = GeckoCommand.bytes_to_geckocommand(f)
-                    if child.codetype in {GeckoCommand.Type.TERMINATOR, GeckoCommand.Type.EXIT}:
-                        f.seek(-8, 1)
-                        return
-                    code.add_child(child)
-                except Exception:
+        def add_children_till_terminator(code: "GeckoCommand", f: BytesIO):
+            while f.tell() < len(f.getvalue()):
+                child = GeckoCommand.bytes_to_geckocommand(f)
+                if child.codetype in {GeckoCommand.Type.TERMINATOR, GeckoCommand.Type.EXIT}:
+                    f.seek(-8, 1)
                     return
+                code.add_child(child)
 
         if isinstance(f, bytes):
             f = BytesIO(f)
