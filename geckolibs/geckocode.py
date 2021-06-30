@@ -1283,7 +1283,7 @@ class Write32(GeckoCommand):
 
 
 class WriteString(GeckoCommand):
-    def __init__(self, value: bytes, address: int = 0, isPointer: bool = False):
+    def __init__(self, value: Union[bytes, str], address: int = 0, isPointer: bool = False):
         self.value = value
         self._address = address & 0x1FFFFFF
         self._isPointer = isPointer
@@ -1315,7 +1315,9 @@ class WriteString(GeckoCommand):
         return self._value
 
     @value.setter
-    def value(self, value: bytes):
+    def value(self, value: Union[bytes, str]):
+        if isinstance(value, str):
+            value = value.encode("ascii")
         self._value = value
 
     def virtual_length(self) -> int:
@@ -3874,6 +3876,9 @@ class AsmInsert(GeckoCommand):
 
     @property
     def value(self) -> bytes:
+        length = len(self._value)
+        if length % 8 == 0 and length != 0:
+            return self._value + b"\x60\x00\x00\x00"
         return self._value
 
     @value.setter
@@ -3925,7 +3930,10 @@ class AsmInsertLink(GeckoCommand):
 
     @value.setter
     def value(self, value: bytes):
-        self._value = value
+        length = len(self._value)
+        if length % 8 == 0 and length != 0:
+            return self._value + b"\x60\x00\x00\x00"
+        return self._value
 
     def virtual_length(self) -> int:
         return ((len(self) + 7) & -0x8) >> 3
@@ -4258,7 +4266,10 @@ class AsmInsertXOR(GeckoCommand):
 
     @value.setter
     def value(self, value: bytes):
-        self._value = value
+        length = len(self._value)
+        if length % 8 == 0 and length != 0:
+            return self._value + b"\x60\x00\x00\x00"
+        return self._value
 
     def virtual_length(self) -> int:
         return ((len(self) + 7) & -0x8) >> 3
