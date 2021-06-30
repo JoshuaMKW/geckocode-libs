@@ -575,7 +575,7 @@ class GeckoCommand(object):
             while f.tell() < len(f.getvalue()):
                 child = GeckoCommand.str_to_geckocommand(f)
                 if child.codetype in {GeckoCommand.Type.TERMINATOR, GeckoCommand.Type.EXIT}:
-                    f.seek(-8, 1)
+                    f.seek(f.tell() - 17)
                     return
                 code.add_child(child)
 
@@ -583,7 +583,6 @@ class GeckoCommand(object):
             f = StringIO(f)
 
         line = f.readline().strip()
-        print(line)
         metadata = bytes.fromhex(line[:8])
 
         address = int.from_bytes(
@@ -4462,8 +4461,6 @@ class GeckoCode(object):
                    desc,
                    enabled=enabled)
         GeckoCode._TmpNameCounter += 1
-
-        print(f.getvalue())
 
         while f.tell() < len(f.getvalue()):
             command = GeckoCommand.str_to_geckocommand(f)

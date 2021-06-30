@@ -145,7 +145,6 @@ class GeckoCodeTable(object):
         enabledCodes = set()
 
         mode = GeckoCodeTable.detect_codelist_type(f)
-        print(mode)
         if mode == GeckoTextType.DOLPHIN:
             f.seek(0)
             while True:
@@ -164,10 +163,7 @@ class GeckoCodeTable(object):
         desc = []
         data = []
         _gameInfoCollected = False
-        while True:
-            if f.tell() == len(f.getvalue()):
-                break
-
+        while f.tell() < len(f.getvalue()):
             line = f.readline()
             sLine = line.strip()
             if mode == GeckoTextType.DOLPHIN:
@@ -193,7 +189,6 @@ class GeckoCodeTable(object):
                     if "".join(sLine.split()).isalnum():
                         data.append(sLine)
             elif mode == GeckoTextType.OCARINA:
-                print(sLine)
                 if sLine == "":
                     name = ""
                     author = ""
@@ -228,12 +223,15 @@ class GeckoCodeTable(object):
                         data.clear()
                         break
             else:
-                if line == "":
-                    if data != "":
-                        gct.add_child(GeckoCode.from_text(data.rstrip()))
-                    data = ""
+                if sLine != "":
+                    data.append(sLine)
                 else:
-                    data += f"{line}\n"
+                    data.clear()
+
+                if f.tell() >= len(f.getvalue()):
+                    if len(data) > 0:
+                        gct.add_child(GeckoCode.from_text("\n".join(data).strip()))
+                    data.clear()
 
         return gct
 
