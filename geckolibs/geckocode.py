@@ -1426,7 +1426,7 @@ class IfEqual32(GeckoCommand):
     def __init__(self, value: Union[int, bytes], address: int = 0, isPointer: bool = False,
                  endif: bool = False):
         self.value = value
-        self._address = address
+        self._address = address & ~1
         self._endif = endif
         self._isPointer = isPointer
         self._children = []
@@ -1501,7 +1501,7 @@ class IfNotEqual32(GeckoCommand):
     def __init__(self, value: Union[int, bytes], address: int = 0, isPointer: bool = False,
                  endif: bool = False):
         self.value = value
-        self._address = address
+        self._address = address & ~1
         self._endif = endif
         self._isPointer = isPointer
         self._children = []
@@ -1576,7 +1576,7 @@ class IfGreaterThan32(GeckoCommand):
     def __init__(self, value: Union[int, bytes], address: int = 0, isPointer: bool = False,
                  endif: bool = False):
         self.value = value
-        self._address = address
+        self._address = address & ~1
         self._endif = endif
         self._isPointer = isPointer
         self._children = []
@@ -1651,7 +1651,7 @@ class IfLesserThan32(GeckoCommand):
     def __init__(self, value: Union[int, bytes], address: int = 0, isPointer: bool = False,
                  endif: bool = False):
         self.value = value
-        self._address = address
+        self._address = address & ~1
         self._endif = endif
         self._isPointer = isPointer
         self._children = []
@@ -1726,7 +1726,7 @@ class IfEqual16(GeckoCommand):
     def __init__(self, value: Union[int, bytes], address: int = 0, isPointer: bool = False,
                  endif: bool = False, mask: int = 0xFFFF):
         self.value = value
-        self._address = address
+        self._address = address & ~1
         self._endif = endif
         self._mask = mask
         self._isPointer = isPointer
@@ -1802,7 +1802,7 @@ class IfNotEqual16(GeckoCommand):
     def __init__(self, value: Union[int, bytes], address: int = 0, isPointer: bool = False,
                  endif: bool = False, mask: int = 0xFFFF):
         self.value = value
-        self._address = address
+        self._address = address & ~1
         self._endif = endif
         self._mask = mask
         self._isPointer = isPointer
@@ -1878,7 +1878,7 @@ class IfGreaterThan16(GeckoCommand):
     def __init__(self, value: Union[int, bytes], address: int = 0, isPointer: bool = False,
                  endif: bool = False, mask: int = 0xFFFF):
         self.value = value
-        self._address = address
+        self._address = address & ~1
         self._endif = endif
         self._mask = mask
         self._isPointer = isPointer
@@ -1954,7 +1954,7 @@ class IfLesserThan16(GeckoCommand):
     def __init__(self, value: Union[int, bytes], address: int = 0, isPointer: bool = False,
                  endif: bool = False, mask: int = 0xFFFF):
         self.value = value
-        self._address = address
+        self._address = address & ~1
         self._endif = endif
         self._mask = mask
         self._isPointer = isPointer
@@ -3232,7 +3232,7 @@ class GeckoIfEqual16(GeckoCommand):
         GeckoCommand.assert_register(otherRegister)
 
         self._mask = mask
-        self._address = address
+        self._address = address & ~1
         self._endif = endif
         self._register = register
         self._other = otherRegister
@@ -3304,7 +3304,7 @@ class GeckoIfNotEqual16(GeckoCommand):
         GeckoCommand.assert_register(otherRegister)
 
         self._mask = mask
-        self._address = address
+        self._address = address & ~1
         self._endif = endif
         self._register = register
         self._other = otherRegister
@@ -3376,7 +3376,7 @@ class GeckoIfGreaterThan16(GeckoCommand):
         GeckoCommand.assert_register(otherRegister)
 
         self._mask = mask
-        self._address = address
+        self._address = address & ~1
         self._endif = endif
         self._register = register
         self._other = otherRegister
@@ -3448,7 +3448,7 @@ class GeckoIfLesserThan16(GeckoCommand):
         GeckoCommand.assert_register(otherRegister)
 
         self._mask = mask
-        self._address = address
+        self._address = address & ~1
         self._endif = endif
         self._register = register
         self._other = otherRegister
