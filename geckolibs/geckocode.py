@@ -571,22 +571,18 @@ class GeckoCommand(object):
 
     @staticmethod
     def str_to_geckocommand(f: Union[StringIO, str]) -> "GeckoCommand":
-        def add_children_till_terminator(code: "GeckoCommand", f: TextIO):
-            while True:
-                try:
-                    child = GeckoCommand.str_to_geckocommand(f)
-                    if child.codetype in {GeckoCommand.Type.TERMINATOR, GeckoCommand.Type.EXIT}:
-                        f.seek(-8, 1)
-                        return
-                    code.add_child(child)
-                except Exception:
+        def add_children_till_terminator(code: "GeckoCommand", f: StringIO):
+            while f.tell() < len(f.getvalue()):
+                child = GeckoCommand.str_to_geckocommand(f)
+                if child.codetype in {GeckoCommand.Type.TERMINATOR, GeckoCommand.Type.EXIT}:
+                    f.seek(-8, 1)
                     return
+                code.add_child(child)
 
         if isinstance(f, str):
             f = StringIO(f)
 
         line = f.readline().strip()
-        #print(line[:8])
         metadata = bytes.fromhex(line[:8])
 
         address = int.from_bytes(
@@ -4459,16 +4455,12 @@ class GeckoCode(object):
                    enabled=enabled)
         GeckoCode._TmpNameCounter += 1
 
-        print(code.name)
         while f.tell() < len(f.getvalue()):
             command = GeckoCommand.str_to_geckocommand(f)
             code.add_child(command)
             if command.codetype == GeckoCommand.Type.EXIT:
                 break
-        
-        print()
-        for command in code:
-            print(str(command))
+
         return code
 
     @property
