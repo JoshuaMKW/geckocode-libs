@@ -2,11 +2,11 @@ import sys
 from enum import Enum
 from io import BytesIO, StringIO
 from pathlib import Path
-from typing import BinaryIO, Dict, Iterable, List, TextIO, Union
+from typing import BinaryIO, Dict, Iterable, TextIO, Union
 
 from dolreader.dol import DolFile
 
-from .geckocode import Exit, GeckoCode, GeckoCommand, InvalidGeckoCommandError
+from .geckocode import Exit, GeckoCode, GeckoCommand, InvalidGeckoCodeError
 
 
 class GeckoTextType(Enum):
@@ -76,7 +76,7 @@ class GeckoCodeTable(object):
 
     def __setitem__(self, key: str, value: GeckoCode):
         if not isinstance(value, GeckoCode):
-            raise InvalidGeckoCommandError(
+            raise InvalidGeckoCodeError(
                 f"Cannot assign {value.__class__.__name__} as a child of {self.__class__.__name__}")
 
         self._codes[key] = value
@@ -179,7 +179,7 @@ class GeckoCodeTable(object):
                     n = sLine[::-1].find("[") + 1
                     if n == 0:
                         name = sLine[1:]
-                        author = None 
+                        author = None
                     else:
                         name = sLine[1:-n].strip()
                         author = sLine[-n+1:-1].strip()
@@ -230,7 +230,8 @@ class GeckoCodeTable(object):
 
                 if f.tell() >= len(f.getvalue()):
                     if len(data) > 0:
-                        gct.add_child(GeckoCode.from_text("\n".join(data).strip()))
+                        gct.add_child(GeckoCode.from_text(
+                            "\n".join(data).strip()))
                     data.clear()
 
         return gct
@@ -290,11 +291,10 @@ class GeckoCodeTable(object):
 
     def as_bytes(self) -> bytes:
         """Return the raw data representation of this GCT"""
-        magic = b"\x00\xD0\xC0\xDE\x00\xD0\xC0\xDE"
         packet = b""
         for code in self:
             packet += code.as_bytes()
-        return magic + packet
+        return GeckoCodeTable.MAGIC + packet + b"\xF0\x00\x00\x00\x00\x00\x00\x00"
 
     def as_text(self) -> str:
         """Return the textual representation of this GCT"""
@@ -302,7 +302,7 @@ class GeckoCodeTable(object):
         packet = ""
         for code in self:
             packet += f"{code.as_text()}\n"
-        return (magic + packet).strip()
+        return (magic + packet + "F0000000 00000000").strip()
 
     def as_codelist(self, ty: GeckoTextType = GeckoTextType.DOLPHIN) -> str:
         """Return this GCT as a textual codelist of the type specified by `ty`"""

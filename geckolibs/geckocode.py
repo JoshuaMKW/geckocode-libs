@@ -1,14 +1,11 @@
-from io import BytesIO, StringIO
-
 from enum import Enum
-import sys
-from typing import Any, BinaryIO, Iterable, List, Optional, TextIO, Tuple, Union
+from io import BytesIO, StringIO
+from typing import (Any, BinaryIO, Iterable, List, Optional, TextIO, Tuple,
+                    Union)
 
 from dolreader.dol import DolFile
-from . import __version__
 
-import traceback
-import time
+from . import __version__
 
 
 def _align_bytes(_bytes: bytes, alignment: int = 4, fill: bytes = b"\x00") -> bytes:
@@ -20,7 +17,11 @@ def _align_bytes(_bytes: bytes, alignment: int = 4, fill: bytes = b"\x00") -> by
 
 
 class InvalidGeckoCommandError(Exception):
-    pass
+    ...
+
+
+class InvalidGeckoCodeError(Exception):
+    ...
 
 
 class classproperty(property):
@@ -4388,7 +4389,8 @@ class GeckoCode(object):
         return f"{self.__class__.__name__}({self.__dict__})"
 
     def __str__(self) -> str:
-        desc = "\n  " + "\n  ".join(self.desc.strip().split("\n")) if self.desc else ""
+        desc = "\n  " + \
+            "\n  ".join(self.desc.strip().split("\n")) if self.desc else ""
         author = f" [{self.author.strip()}]" if self.author else ""
         return f"{self.name.strip()}{author}{desc}"
 
