@@ -4675,9 +4675,12 @@ class GeckoCode(object):
         for command in self._commands:
             yield command
 
-    def add_child(self, command: GeckoCommand):
+    def add_child(self, command: GeckoCommand, index: int = -1):
         """Add a GeckoCommand to this GeckoCode"""
-        self._commands.append(command)
+        if index < 0:
+            self._commands.append(command)
+        else:
+            self._commands.insert(index, command)
 
     def remove_child(self, command: GeckoCommand):
         """Remove a GeckoCommand from this GeckoCode"""
