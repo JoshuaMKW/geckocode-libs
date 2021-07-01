@@ -1343,7 +1343,7 @@ class WriteString(GeckoCommand):
 
 
 class WriteSerial(GeckoCommand):
-    def __init__(self, value: Union[int, bytes], repeat: int = 0, address: int = 0, isPointer: bool = False,
+    def __init__(self, value: Union[int, bytes], address: int = 0, repeat: int = 0, isPointer: bool = False,
                  valueSize: int = 2, addrInc: int = 4, valueInc: int = 0):
         self.value = value
         self.valueInc = valueInc
