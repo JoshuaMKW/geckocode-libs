@@ -1781,7 +1781,6 @@ class IfEqual16(GeckoCommand):
         return 8 + sum([len(c) for c in self])
 
     def __str__(self) -> str:
-        
         if len(self.children) > 0:
             GeckoCommand._IndentionStart += GeckoCommand._IndentionWidth
             childrenPrint = "\n" + "\n".join([" "*GeckoCommand._IndentionStart + str(child)
