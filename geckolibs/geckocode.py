@@ -58,6 +58,9 @@ class GeckoCommand(object):
     `as_bytes`:              Returns the raw data representation of this `GeckoCommand`.
     `as_text`:               Returns the textual representation of this `GeckoCommand`.
     """
+    _IndentionWidth = 4
+    _IndentionStart = 0
+
     class Type(Enum):
         WRITE_8 = 0x00
         WRITE_16 = 0x02
@@ -1077,7 +1080,7 @@ class GeckoCommand(object):
 
 
 class Write8(GeckoCommand):
-    def __init__(self, value: Union[int, bytes], repeat: int = 0, address: int = 0, isPointer: bool = False):
+    def __init__(self, value: Union[int, bytes], address: int = 0, repeat: int = 0, isPointer: bool = False):
         self.value = value
         self._address = address & 0x1FFFFFF
         self._repeat = repeat
@@ -1148,7 +1151,7 @@ class Write8(GeckoCommand):
 
 
 class Write16(GeckoCommand):
-    def __init__(self, value: Union[int, bytes], repeat: int = 0, address: int = 0, isPointer: bool = False):
+    def __init__(self, value: Union[int, bytes], address: int = 0, repeat: int = 0, isPointer: bool = False):
         self.value = value
         self._address = address & 0x1FFFFFF
         self._repeat = repeat
@@ -1434,11 +1437,19 @@ class IfEqual32(GeckoCommand):
         return 8 + sum([len(c) for c in self])
 
     def __str__(self) -> str:
+        if len(self.children) > 0:
+            GeckoCommand._IndentionStart += GeckoCommand._IndentionWidth
+            childrenPrint = "\n" + "\n".join([" "*GeckoCommand._IndentionStart + str(child)
+                                              for child in self._children])
+            GeckoCommand._IndentionStart -= GeckoCommand._IndentionWidth
+        else:
+            childrenPrint = ""
+
         intType = GeckoCommand.type_to_int(self.codetype) | (
             0x10 if self._isPointer else 0)
         addrstr = "pointer address" if self._isPointer else "base address"
         endif = "(Apply Endif) " if self._endif else ""
-        return f"({intType:02X}) {endif}If the word at address (0x{self._address:08X} + the {addrstr}) is equal to 0x{self.value:08X}:"
+        return f"({intType:02X}) {endif}If the word at address (0x{self._address:08X} + the {addrstr}) is equal to 0x{self.value:08X}:{childrenPrint}"
 
     def __getitem__(self, index: int) -> GeckoCommand:
         return self._children[index]
@@ -1512,11 +1523,19 @@ class IfNotEqual32(GeckoCommand):
         return 8 + sum([len(c) for c in self])
 
     def __str__(self) -> str:
+        if len(self.children) > 0:
+            GeckoCommand._IndentionStart += GeckoCommand._IndentionWidth
+            childrenPrint = "\n" + "\n".join([" "*GeckoCommand._IndentionStart + str(child)
+                                              for child in self._children])
+            GeckoCommand._IndentionStart -= GeckoCommand._IndentionWidth
+        else:
+            childrenPrint = ""
+
         intType = GeckoCommand.type_to_int(self.codetype) | (
             0x10 if self._isPointer else 0)
         addrstr = "pointer address" if self._isPointer else "base address"
         endif = "(Apply Endif) " if self._endif else ""
-        return f"({intType:02X}) {endif}If the word at address (0x{self._address:08X} + the {addrstr}) is not equal to 0x{self.value:08X}:"
+        return f"({intType:02X}) {endif}If the word at address (0x{self._address:08X} + the {addrstr}) is not equal to 0x{self.value:08X}:{childrenPrint}"
 
     def __getitem__(self, index: int) -> GeckoCommand:
         return self._children[index]
@@ -1590,11 +1609,19 @@ class IfGreaterThan32(GeckoCommand):
         return 8 + sum([len(c) for c in self])
 
     def __str__(self) -> str:
+        if len(self.children) > 0:
+            GeckoCommand._IndentionStart += GeckoCommand._IndentionWidth
+            childrenPrint = "\n" + "\n".join([" "*GeckoCommand._IndentionStart + str(child)
+                                              for child in self._children])
+            GeckoCommand._IndentionStart -= GeckoCommand._IndentionWidth
+        else:
+            childrenPrint = ""
+
         intType = GeckoCommand.type_to_int(self.codetype) | (
             0x10 if self._isPointer else 0)
         addrstr = "pointer address" if self._isPointer else "base address"
         endif = "(Apply Endif) " if self._endif else ""
-        return f"({intType:02X}) {endif}If the word at address (0x{self._address:08X} + the {addrstr}) is greater than 0x{self.value:08X}:"
+        return f"({intType:02X}) {endif}If the word at address (0x{self._address:08X} + the {addrstr}) is greater than 0x{self.value:08X}:{childrenPrint}"
 
     def __getitem__(self, index: int) -> GeckoCommand:
         return self._children[index]
@@ -1668,6 +1695,13 @@ class IfLesserThan32(GeckoCommand):
         return 8 + sum([len(c) for c in self])
 
     def __str__(self) -> str:
+        if len(self.children) > 0:
+            GeckoCommand._IndentionStart += GeckoCommand._IndentionWidth
+            childrenPrint = "\n" + "\n".join([" "*GeckoCommand._IndentionStart + str(child)
+                                              for child in self._children])
+            GeckoCommand._IndentionStart -= GeckoCommand._IndentionWidth
+        else:
+            childrenPrint = ""
         intType = GeckoCommand.type_to_int(self.codetype) | (
             0x10 if self._isPointer else 0)
         addrstr = "pointer address" if self._isPointer else "base address"
@@ -1747,11 +1781,20 @@ class IfEqual16(GeckoCommand):
         return 8 + sum([len(c) for c in self])
 
     def __str__(self) -> str:
+        
+        if len(self.children) > 0:
+            GeckoCommand._IndentionStart += GeckoCommand._IndentionWidth
+            childrenPrint = "\n" + "\n".join([" "*GeckoCommand._IndentionStart + str(child)
+                                              for child in self._children])
+            GeckoCommand._IndentionStart -= GeckoCommand._IndentionWidth
+        else:
+            childrenPrint = ""
+
         intType = GeckoCommand.type_to_int(self.codetype) | (
             0x10 if self._isPointer else 0)
         addrstr = "pointer address" if self._isPointer else "base address"
         endif = "(Apply Endif) " if self._endif else ""
-        return f"({intType:02X}) {endif}If the short at address (0x{self._address:08X} + the {addrstr}) & ~0x{self._mask:04X} is equal to 0x{self.value:08X}:"
+        return f"({intType:02X}) {endif}If the short at address (0x{self._address:08X} + the {addrstr}) & ~0x{self._mask:04X} is equal to 0x{self.value:08X}:{childrenPrint}"
 
     def __getitem__(self, index: int) -> GeckoCommand:
         return self._children[index]
@@ -1826,11 +1869,19 @@ class IfNotEqual16(GeckoCommand):
         return 8 + sum([len(c) for c in self])
 
     def __str__(self) -> str:
+        if len(self.children) > 0:
+            GeckoCommand._IndentionStart += GeckoCommand._IndentionWidth
+            childrenPrint = "\n" + "\n".join([" "*GeckoCommand._IndentionStart + str(child)
+                                              for child in self._children])
+            GeckoCommand._IndentionStart -= GeckoCommand._IndentionWidth
+        else:
+            childrenPrint = ""
+            
         intType = GeckoCommand.type_to_int(self.codetype) | (
             0x10 if self._isPointer else 0)
         addrstr = "pointer address" if self._isPointer else "base address"
         endif = "(Apply Endif) " if self._endif else ""
-        return f"({intType:02X}) {endif}If the short at address (0x{self._address:08X} + the {addrstr}) & ~0x{self._mask:04X} is not equal to 0x{self.value:08X}:"
+        return f"({intType:02X}) {endif}If the short at address (0x{self._address:08X} + the {addrstr}) & ~0x{self._mask:04X} is not equal to 0x{self.value:08X}:{childrenPrint}"
 
     def __getitem__(self, index: int) -> GeckoCommand:
         return self._children[index]
@@ -1905,11 +1956,19 @@ class IfGreaterThan16(GeckoCommand):
         return 8 + sum([len(c) for c in self])
 
     def __str__(self) -> str:
+        if len(self.children) > 0:
+            GeckoCommand._IndentionStart += GeckoCommand._IndentionWidth
+            childrenPrint = "\n" + "\n".join([" "*GeckoCommand._IndentionStart + str(child)
+                                              for child in self._children])
+            GeckoCommand._IndentionStart -= GeckoCommand._IndentionWidth
+        else:
+            childrenPrint = ""
+
         intType = GeckoCommand.type_to_int(self.codetype) | (
             0x10 if self._isPointer else 0)
         addrstr = "pointer address" if self._isPointer else "base address"
         endif = "(Apply Endif) " if self._endif else ""
-        return f"({intType:02X}) {endif}If the short at address (0x{self._address:08X} + the {addrstr}) & ~0x{self._mask:04X} is greater than 0x{self.value:08X}:"
+        return f"({intType:02X}) {endif}If the short at address (0x{self._address:08X} + the {addrstr}) & ~0x{self._mask:04X} is greater than 0x{self.value:08X}:{childrenPrint}"
 
     def __getitem__(self, index: int) -> GeckoCommand:
         return self._children[index]
@@ -1984,11 +2043,19 @@ class IfLesserThan16(GeckoCommand):
         return 8 + sum([len(c) for c in self])
 
     def __str__(self) -> str:
+        if len(self.children) > 0:
+            GeckoCommand._IndentionStart += GeckoCommand._IndentionWidth
+            childrenPrint = "\n" + "\n".join([" "*GeckoCommand._IndentionStart + str(child)
+                                              for child in self._children])
+            GeckoCommand._IndentionStart -= GeckoCommand._IndentionWidth
+        else:
+            childrenPrint = ""
+
         intType = GeckoCommand.type_to_int(self.codetype) | (
             0x10 if self._isPointer else 0)
         addrstr = "pointer address" if self._isPointer else "base address"
         endif = "(Apply Endif) " if self._endif else ""
-        return f"({intType:02X}) {endif}If the short at address (0x{self._address:08X} + the {addrstr}) & ~0x{self._mask:04X} is lesser than 0x{self.value:08X}:"
+        return f"({intType:02X}) {endif}If the short at address (0x{self._address:08X} + the {addrstr}) & ~0x{self._mask:04X} is lesser than 0x{self.value:08X}:{childrenPrint}"
 
     def __getitem__(self, index: int) -> GeckoCommand:
         return self._children[index]
@@ -3266,13 +3333,21 @@ class GeckoIfEqual16(GeckoCommand):
         return 8 + sum([len(c) for c in self])
 
     def __str__(self) -> str:
+        if len(self.children) > 0:
+            GeckoCommand._IndentionStart += GeckoCommand._IndentionWidth
+            childrenPrint = "\n" + "\n".join([" "*GeckoCommand._IndentionStart + str(child)
+                                              for child in self._children])
+            GeckoCommand._IndentionStart -= GeckoCommand._IndentionWidth
+        else:
+            childrenPrint = ""
+
         intType = GeckoCommand.type_to_int(self.codetype) | (
             0x10 if self._isPointer else 0)
         addrstr = "pointer address" if self._isPointer else "base address"
         home = f"(Gecko Register {self._register} & ~0x{self._mask:04X})" if self._register != 0xF else f"the short at address (0x{self._address:08X} + the {addrstr})"
         target = f"(Gecko Register {self._other} & ~0x{self._mask:04X})" if self._other != 0xF else f"the short at address (0x{self._address:08X} + the {addrstr})"
         endif = "(Apply Endif) " if self._endif else ""
-        return f"({intType:02X}) {endif}If {home} is equal to {target}:"
+        return f"({intType:02X}) {endif}If {home} is equal to {target}:{childrenPrint}"
 
     def __getitem__(self, index: int) -> GeckoCommand:
         return self._children[index]
@@ -3341,13 +3416,21 @@ class GeckoIfNotEqual16(GeckoCommand):
         return 8 + sum([len(c) for c in self])
 
     def __str__(self) -> str:
+        if len(self.children) > 0:
+            GeckoCommand._IndentionStart += GeckoCommand._IndentionWidth
+            childrenPrint = "\n" + "\n".join([" "*GeckoCommand._IndentionStart + str(child)
+                                              for child in self._children])
+            GeckoCommand._IndentionStart -= GeckoCommand._IndentionWidth
+        else:
+            childrenPrint = ""
+
         intType = GeckoCommand.type_to_int(self.codetype) | (
             0x10 if self._isPointer else 0)
         addrstr = "pointer address" if self._isPointer else "base address"
         home = f"(Gecko Register {self._register} & ~0x{self._mask:04X})" if self._register != 0xF else f"the short at address (0x{self._address:08X} + the {addrstr})"
         target = f"(Gecko Register {self._other} & ~0x{self._mask:04X})" if self._other != 0xF else f"the short at address (0x{self._address:08X} + the {addrstr})"
         endif = "(Apply Endif) " if self._endif else ""
-        return f"({intType:02X}) {endif}If {home} is not equal to {target}:"
+        return f"({intType:02X}) {endif}If {home} is not equal to {target}:{childrenPrint}"
 
     def __getitem__(self, index: int) -> GeckoCommand:
         return self._children[index]
@@ -3416,13 +3499,21 @@ class GeckoIfGreaterThan16(GeckoCommand):
         return 8 + sum([len(c) for c in self])
 
     def __str__(self) -> str:
+        if len(self.children) > 0:
+            GeckoCommand._IndentionStart += GeckoCommand._IndentionWidth
+            childrenPrint = "\n" + "\n".join([" "*GeckoCommand._IndentionStart + str(child)
+                                              for child in self._children])
+            GeckoCommand._IndentionStart -= GeckoCommand._IndentionWidth
+        else:
+            childrenPrint = ""
+
         intType = GeckoCommand.type_to_int(self.codetype) | (
             0x10 if self._isPointer else 0)
         addrstr = "pointer address" if self._isPointer else "base address"
         home = f"(Gecko Register {self._register} & ~0x{self._mask:04X})" if self._register != 0xF else f"the short at address (0x{self._address:08X} + the {addrstr})"
         target = f"(Gecko Register {self._other} & ~0x{self._mask:04X})" if self._other != 0xF else f"the short at address (0x{self._address:08X} + the {addrstr})"
         endif = "(Apply Endif) " if self._endif else ""
-        return f"({intType:02X}) {endif}If {home} is greater than {target}:"
+        return f"({intType:02X}) {endif}If {home} is greater than {target}:{childrenPrint}"
 
     def __getitem__(self, index: int) -> GeckoCommand:
         return self._children[index]
@@ -3491,13 +3582,21 @@ class GeckoIfLesserThan16(GeckoCommand):
         return 8 + sum([len(c) for c in self])
 
     def __str__(self) -> str:
+        if len(self.children) > 0:
+            GeckoCommand._IndentionStart += GeckoCommand._IndentionWidth
+            childrenPrint = "\n" + "\n".join([" "*GeckoCommand._IndentionStart + str(child)
+                                              for child in self._children])
+            GeckoCommand._IndentionStart -= GeckoCommand._IndentionWidth
+        else:
+            childrenPrint = ""
+
         intType = GeckoCommand.type_to_int(self.codetype) | (
             0x10 if self._isPointer else 0)
         addrstr = "pointer address" if self._isPointer else "base address"
         home = f"(Gecko Register {self._register} & ~0x{self._mask:04X})" if self._register != 0xF else f"the short at address (0x{self._address:08X} + the {addrstr})"
         target = f"(Gecko Register {self._other} & ~0x{self._mask:04X})" if self._other != 0xF else f"the short at address (0x{self._address:08X} + the {addrstr})"
         endif = "(Apply Endif) " if self._endif else ""
-        return f"({intType:02X}) {endif}If {home} is less than {target}:"
+        return f"({intType:02X}) {endif}If {home} is less than {target}:{childrenPrint}"
 
     def __getitem__(self, index: int) -> GeckoCommand:
         return self._children[index]
@@ -3561,11 +3660,19 @@ class CounterIfEqual16(GeckoCommand):
         return 8 + sum([len(c) for c in self])
 
     def __str__(self) -> str:
+        if len(self.children) > 0:
+            GeckoCommand._IndentionStart += GeckoCommand._IndentionWidth
+            childrenPrint = "\n" + "\n".join([" "*GeckoCommand._IndentionStart + str(child)
+                                              for child in self._children])
+            GeckoCommand._IndentionStart -= GeckoCommand._IndentionWidth
+        else:
+            childrenPrint = ""
+
         intType = GeckoCommand.type_to_int(self.codetype)
-        ty = " (Resets counter if true)" if (self._flags &
-                                             0x8) != 0 else " (Resets counter if false)"
+        ty = "(Resets counter if true) " if (self._flags &
+                                             0x8) != 0 else "(Resets counter if false) "
         endif = "(Apply Endif) " if (self._flags & 0x1) != 0 else ""
-        return f"({intType:02X}) {endif}If (0x{self.value:08X} & ~0x{self._mask:04X}) is equal to {self._counter}:{ty}"
+        return f"({intType:02X}) {endif} {ty}If (0x{self.value:08X} & ~0x{self._mask:04X}) is equal to {self._counter}:{childrenPrint}"
 
     def __getitem__(self, index: int) -> GeckoCommand:
         return self._children[index]
@@ -3637,11 +3744,19 @@ class CounterIfNotEqual16(GeckoCommand):
         return 8 + sum([len(c) for c in self])
 
     def __str__(self) -> str:
+        if len(self.children) > 0:
+            GeckoCommand._IndentionStart += GeckoCommand._IndentionWidth
+            childrenPrint = "\n" + "\n".join([" "*GeckoCommand._IndentionStart + str(child)
+                                              for child in self._children])
+            GeckoCommand._IndentionStart -= GeckoCommand._IndentionWidth
+        else:
+            childrenPrint = ""
+
         intType = GeckoCommand.type_to_int(self.codetype)
-        ty = " (Resets counter if true)" if (self._flags &
-                                             0x8) != 0 else " (Resets counter if false)"
+        ty = "(Resets counter if true) " if (self._flags &
+                                             0x8) != 0 else "(Resets counter if false) "
         endif = "(Apply Endif) " if (self._flags & 0x1) != 0 else ""
-        return f"({intType:02X}) {endif}If (0x{self.value:08X} & ~0x{self._mask:04X}) is not equal to {self._counter}:{ty}"
+        return f"({intType:02X}) {endif} {ty}If (0x{self.value:08X} & ~0x{self._mask:04X}) is not equal to {self._counter}:{childrenPrint}"
 
     def __getitem__(self, index: int) -> GeckoCommand:
         return self._children[index]
@@ -3713,11 +3828,19 @@ class CounterIfGreaterThan16(GeckoCommand):
         return 8 + sum([len(c) for c in self])
 
     def __str__(self) -> str:
+        if len(self.children) > 0:
+            GeckoCommand._IndentionStart += GeckoCommand._IndentionWidth
+            childrenPrint = "\n" + "\n".join([" "*GeckoCommand._IndentionStart + str(child)
+                                              for child in self._children])
+            GeckoCommand._IndentionStart -= GeckoCommand._IndentionWidth
+        else:
+            childrenPrint = ""
+
         intType = GeckoCommand.type_to_int(self.codetype)
-        ty = " (Resets counter if true)" if (self._flags &
-                                             0x8) != 0 else " (Resets counter if false)"
+        ty = "(Resets counter if true) " if (self._flags &
+                                             0x8) != 0 else "(Resets counter if false) "
         endif = "(Apply Endif) " if (self._flags & 0x1) != 0 else ""
-        return f"({intType:02X}) {endif}If (0x{self.value:08X} & ~0x{self._mask:04X}) is greater than {self._counter}:{ty}"
+        return f"({intType:02X}) {endif} {ty}If (0x{self.value:08X} & ~0x{self._mask:04X}) is greater than {self._counter}:{childrenPrint}"
 
     def __getitem__(self, index: int) -> GeckoCommand:
         return self._children[index]
@@ -3789,11 +3912,19 @@ class CounterIfLesserThan16(GeckoCommand):
         return 8 + sum([len(c) for c in self])
 
     def __str__(self) -> str:
+        if len(self.children) > 0:
+            GeckoCommand._IndentionStart += GeckoCommand._IndentionWidth
+            childrenPrint = "\n" + "\n".join([" "*GeckoCommand._IndentionStart + str(child)
+                                              for child in self._children])
+            GeckoCommand._IndentionStart -= GeckoCommand._IndentionWidth
+        else:
+            childrenPrint = ""
+
         intType = GeckoCommand.type_to_int(self.codetype)
-        ty = " (Resets counter if true)" if (self._flags &
-                                             0x8) != 0 else " (Resets counter if false)"
+        ty = "(Resets counter if true) " if (self._flags &
+                                             0x8) != 0 else "(Resets counter if false) "
         endif = "(Apply Endif) " if (self._flags & 0x1) != 0 else ""
-        return f"({intType:02X}) {endif}If (0x{self.value:08X} & ~0x{self._mask:04X}) is less than {self._counter}:{ty}"
+        return f"({intType:02X}) {endif} {ty}If (0x{self.value:08X} & ~0x{self._mask:04X}) is less than {self._counter}:{childrenPrint}"
 
     def __getitem__(self, index: int) -> GeckoCommand:
         return self._children[index]
@@ -4342,8 +4473,16 @@ class BrainslugSearch(GeckoCommand):
         return 8 + len(self.value) + sum([len(c) for c in self])
 
     def __str__(self) -> str:
+        if len(self.children) > 0:
+            GeckoCommand._IndentionStart += GeckoCommand._IndentionWidth
+            childrenPrint = "\n" + "\n".join([" "*GeckoCommand._IndentionStart + str(child)
+                                              for child in self._children])
+            GeckoCommand._IndentionStart -= GeckoCommand._IndentionWidth
+        else:
+            childrenPrint = ""
+
         intType = GeckoCommand.type_to_int(self.codetype)
-        return f"({intType:02X}) If the linear data search finds a match between addresses 0x{(self._searchRange[0] & 0xFFFF) << 16:08X} and 0x{(self._searchRange[1] & 0xFFFF) << 16:08X}, set the pointer address to the beginning of the match and run the encapsulated codes"
+        return f"({intType:02X}) If the linear data search finds a match between addresses 0x{(self._searchRange[0] & 0xFFFF) << 16:08X} and 0x{(self._searchRange[1] & 0xFFFF) << 16:08X}, set the pointer address to the beginning of the match and run:{childrenPrint}"
 
     def __getitem__(self, index: int) -> GeckoCommand:
         return self._children[index]

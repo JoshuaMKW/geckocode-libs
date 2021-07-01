@@ -338,14 +338,13 @@ class GeckoCodeTable(object):
                 codelist += f"{code.as_text()}\n\n"
             return codelist.rstrip()
 
-    def print_map(self, buffer: TextIO = sys.stdout, indent: int = 2):
+    def print_map(self, buffer: TextIO = sys.stdout, indent: int = 2, startindent: int = 0):
         """Print a human readable indented map of this GCT"""
-        def printer(command: GeckoCommand, indention: int):
-            print(" "*indention + str(command), file=buffer)
-            if GeckoCommand.is_ifblock(command):
-                for child in command:
-                    printer(child, indention + indent)
+        _prev = GeckoCommand._IndentionWidth
+        GeckoCommand._IndentionWidth = indent
+        GeckoCommand._IndentionStart = startindent
         for code in self:
             for command in code:
-                printer(command, 0)
+                print(command)
+        GeckoCommand._IndentionWidth = _prev
         print(str(Exit()), file=buffer)
