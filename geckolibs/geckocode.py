@@ -4621,12 +4621,28 @@ class GeckoCode(object):
     def __ne__(self, other: "GeckoCode") -> bool:
         return hash(self) != hash(other)
 
-    def __iadd__(self, other: GeckoCommand):
-        if isinstance(other, GeckoCommand):
-            self.add_child(other)
-        else:
+    def __add__(self, other: GeckoCommand) -> "GeckoCode":
+        if not isinstance(other, GeckoCommand):
             raise TypeError(
                 f"{other.__class__.__name__} cannot be added to a {self.__class__.__name__}")
+        
+        code = GeckoCode(self.name, self.author, self.desc, self._commands.copy(), self._enabled)
+        code.add_child(other)
+        return code
+
+    def __iadd__(self, other: GeckoCommand) -> "GeckoCode":
+        if not isinstance(other, GeckoCommand):
+            raise TypeError(
+                f"{other.__class__.__name__} cannot be added to a {self.__class__.__name__}")
+
+        self.add_child(other)
+        return self
+
+    def __radd__(self, other: Union[str, bytes]):
+        if isinstance(other, str):
+            return other + self.as_text()
+        else:
+            return other + self.as_bytes()
 
     @classmethod
     def from_bytes(cls, f: Union[BinaryIO, bytes], name: Optional[str] = None, author: Optional[str] = None, desc: Optional[str] = None, enabled: bool = True) -> "GeckoCode":
