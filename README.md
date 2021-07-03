@@ -33,6 +33,7 @@ Type checking of codes can be done in 3 ways:
 code = Write8(69, 0x80203932)
 
 code == Write8                              # True
+code == Write8.codetype                     # True
 code.codetype == Write8.codetype            # True
 code.codetype == GeckoCommand.Type.WRITE_8  # True
 ```
