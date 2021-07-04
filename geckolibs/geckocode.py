@@ -53,6 +53,8 @@ class GeckoCommand(object):
     `add_child`:             Add a `GeckoCommand` to this `GeckoCommand` (if applicable).
     `remove_child`:          Remove a `GeckoCommand` from this `GeckoCommand` (if applicable).
     `virtual_length`:        Returns the length of this `GeckoCommand` in Gecko \"lines\".
+    `is_ba_type`:            Return if this `GeckoCommand` offsets against the base address.
+    `is_po_type`:            Return if this `GeckoCommand` offsets against the pointer address.
     `apply`:                 Apply this `GeckoCommand` to the `DolFile` given to this method.
     `apply_f`:               Apply this `GeckoCommand` to the DOL at the path given to this method.
     `as_bytes`:              Returns the raw data representation of this `GeckoCommand`.
@@ -1029,6 +1031,14 @@ class GeckoCommand(object):
         """Remove a child command from this GeckoCommand"""
         pass
 
+    def is_ba_type(self) -> bool:
+        """Return if this GeckoCommand offsets with the base address"""
+        return False
+
+    def is_po_type(self) -> bool:
+        """Return if this GeckoCommand offsets with the pointer address"""
+        return False
+
     def virtual_length(self) -> int:
         """Return the length of this GeckoCommand in Gecko \"lines\""""
         return 0
@@ -1131,6 +1141,12 @@ class Write8(GeckoCommand):
     def virtual_length(self) -> int:
         return 1
 
+    def is_ba_type(self) -> bool:
+        return not self._isPointer
+
+    def is_po_type(self) -> bool:
+        return self._isPointer
+
     def apply(self, dol: DolFile) -> bool:
         addr = self._address | 0x80000000
         if dol.is_mapped(addr):
@@ -1202,6 +1218,12 @@ class Write16(GeckoCommand):
     def virtual_length(self) -> int:
         return 1
 
+    def is_ba_type(self) -> bool:
+        return not self._isPointer
+
+    def is_po_type(self) -> bool:
+        return self._isPointer
+
     def apply(self, dol: DolFile) -> bool:
         addr = self._address | 0x80000000
         if dol.is_mapped(addr):
@@ -1269,6 +1291,12 @@ class Write32(GeckoCommand):
     def virtual_length(self) -> int:
         return 1
 
+    def is_ba_type(self) -> bool:
+        return not self._isPointer
+
+    def is_po_type(self) -> bool:
+        return self._isPointer
+
     def apply(self, dol: DolFile) -> bool:
         addr = self._address | 0x80000000
         if dol.is_mapped(addr):
@@ -1325,6 +1353,12 @@ class WriteString(GeckoCommand):
 
     def virtual_length(self) -> int:
         return ((len(self) + 7) & -0x8) >> 3
+
+    def is_ba_type(self) -> bool:
+        return not self._isPointer
+
+    def is_po_type(self) -> bool:
+        return self._isPointer
 
     def apply(self, dol: DolFile) -> bool:
         addr = self._address | 0x80000000
@@ -1403,6 +1437,12 @@ class WriteSerial(GeckoCommand):
 
     def virtual_length(self) -> int:
         return 2
+
+    def is_ba_type(self) -> bool:
+        return not self._isPointer
+
+    def is_po_type(self) -> bool:
+        return self._isPointer
 
     def apply(self, dol: DolFile) -> bool:
         addr = self._address | 0x80000000
@@ -1491,6 +1531,12 @@ class IfEqual32(GeckoCommand):
     def virtual_length(self) -> int:
         return len(self.children) + 1
 
+    def is_ba_type(self) -> bool:
+        return not self._isPointer
+
+    def is_po_type(self) -> bool:
+        return self._isPointer
+
     def populate_from_bytes(self, f: BinaryIO):
         code = GeckoCommand.bytes_to_geckocommand(f)
         while code != Terminator:
@@ -1576,6 +1622,12 @@ class IfNotEqual32(GeckoCommand):
 
     def virtual_length(self) -> int:
         return len(self.children) + 1
+
+    def is_ba_type(self) -> bool:
+        return not self._isPointer
+
+    def is_po_type(self) -> bool:
+        return self._isPointer
 
     def populate_from_bytes(self, f: BinaryIO):
         code = GeckoCommand.bytes_to_geckocommand(f)
@@ -1663,6 +1715,12 @@ class IfGreaterThan32(GeckoCommand):
     def virtual_length(self) -> int:
         return len(self.children) + 1
 
+    def is_ba_type(self) -> bool:
+        return not self._isPointer
+
+    def is_po_type(self) -> bool:
+        return self._isPointer
+
     def populate_from_bytes(self, f: BinaryIO):
         code = GeckoCommand.bytes_to_geckocommand(f)
         while code != Terminator:
@@ -1747,6 +1805,12 @@ class IfLesserThan32(GeckoCommand):
 
     def virtual_length(self) -> int:
         return len(self.children) + 1
+
+    def is_ba_type(self) -> bool:
+        return not self._isPointer
+
+    def is_po_type(self) -> bool:
+        return self._isPointer
 
     def populate_from_bytes(self, f: BinaryIO):
         code = GeckoCommand.bytes_to_geckocommand(f)
@@ -1835,6 +1899,12 @@ class IfEqual16(GeckoCommand):
     def virtual_length(self) -> int:
         return len(self.children) + 1
 
+    def is_ba_type(self) -> bool:
+        return not self._isPointer
+
+    def is_po_type(self) -> bool:
+        return self._isPointer
+
     def populate_from_bytes(self, f: BinaryIO):
         code = GeckoCommand.bytes_to_geckocommand(f)
         while code != Terminator:
@@ -1875,7 +1945,7 @@ class IfNotEqual16(GeckoCommand):
             GeckoCommand._IndentionStart -= GeckoCommand._IndentionWidth
         else:
             childrenPrint = ""
-            
+
         intType = GeckoCommand.type_to_int(self.codetype) | (
             0x10 if self._isPointer else 0)
         addrstr = "pointer address" if self._isPointer else "base address"
@@ -1921,6 +1991,12 @@ class IfNotEqual16(GeckoCommand):
 
     def virtual_length(self) -> int:
         return len(self.children) + 1
+
+    def is_ba_type(self) -> bool:
+        return not self._isPointer
+
+    def is_po_type(self) -> bool:
+        return self._isPointer
 
     def populate_from_bytes(self, f: BinaryIO):
         code = GeckoCommand.bytes_to_geckocommand(f)
@@ -2009,6 +2085,12 @@ class IfGreaterThan16(GeckoCommand):
     def virtual_length(self) -> int:
         return len(self.children) + 1
 
+    def is_ba_type(self) -> bool:
+        return not self._isPointer
+
+    def is_po_type(self) -> bool:
+        return self._isPointer
+
     def populate_from_bytes(self, f: BinaryIO):
         code = GeckoCommand.bytes_to_geckocommand(f)
         while code != Terminator:
@@ -2096,6 +2178,12 @@ class IfLesserThan16(GeckoCommand):
     def virtual_length(self) -> int:
         return len(self.children) + 1
 
+    def is_ba_type(self) -> bool:
+        return not self._isPointer
+
+    def is_po_type(self) -> bool:
+        return self._isPointer
+
     def populate_from_bytes(self, f: BinaryIO):
         code = GeckoCommand.bytes_to_geckocommand(f)
         while code != Terminator:
@@ -2182,6 +2270,12 @@ class BaseAddressLoad(GeckoCommand):
     def virtual_length(self) -> int:
         return 1
 
+    def is_ba_type(self) -> bool:
+        return not self._isPointer
+
+    def is_po_type(self) -> bool:
+        return self._isPointer
+
     def as_bytes(self) -> bytes:
         intType = GeckoCommand.type_to_int(self.codetype) | (
             0x10 if self._isPointer else 0)
@@ -2258,6 +2352,12 @@ class BaseAddressSet(GeckoCommand):
     def virtual_length(self) -> int:
         return 1
 
+    def is_ba_type(self) -> bool:
+        return not self._isPointer
+
+    def is_po_type(self) -> bool:
+        return self._isPointer
+
     def as_bytes(self) -> bytes:
         intType = GeckoCommand.type_to_int(self.codetype) | (
             0x10 if self._isPointer else 0)
@@ -2325,6 +2425,12 @@ class BaseAddressStore(GeckoCommand):
 
     def virtual_length(self) -> int:
         return 1
+
+    def is_ba_type(self) -> bool:
+        return not self._isPointer
+
+    def is_po_type(self) -> bool:
+        return self._isPointer
 
     def as_bytes(self) -> bytes:
         intType = GeckoCommand.type_to_int(self.codetype) | (
@@ -2451,6 +2557,12 @@ class PointerAddressLoad(GeckoCommand):
     def virtual_length(self) -> int:
         return 1
 
+    def is_ba_type(self) -> bool:
+        return not self._isPointer
+
+    def is_po_type(self) -> bool:
+        return self._isPointer
+
     def as_bytes(self) -> bytes:
         intType = GeckoCommand.type_to_int(self.codetype) | (
             0x10 if self._isPointer else 0)
@@ -2527,6 +2639,12 @@ class PointerAddressSet(GeckoCommand):
     def virtual_length(self) -> int:
         return 1
 
+    def is_ba_type(self) -> bool:
+        return not self._isPointer
+
+    def is_po_type(self) -> bool:
+        return self._isPointer
+
     def as_bytes(self) -> bytes:
         intType = GeckoCommand.type_to_int(self.codetype) | (
             0x10 if self._isPointer else 0)
@@ -2594,6 +2712,12 @@ class PointerAddressStore(GeckoCommand):
 
     def virtual_length(self) -> int:
         return 1
+
+    def is_ba_type(self) -> bool:
+        return not self._isPointer
+
+    def is_po_type(self) -> bool:
+        return self._isPointer
 
     def as_bytes(self) -> bytes:
         intType = GeckoCommand.type_to_int(self.codetype) | (
@@ -2738,16 +2862,16 @@ class Return(GeckoCommand):
 class Goto(GeckoCommand):
     def __init__(self, flags: int = 0, lineOffset: int = 0):
         self._flags = flags
-        self.offset = lineOffset
+        self._offset = lineOffset
 
     def __str__(self) -> str:
         intType = GeckoCommand.type_to_int(self.codetype)
         if self._flags == 0:
-            return f"({intType:02X}) If the code execution status is true, jump to (next line of code + {self.offset} lines)"
+            return f"({intType:02X}) If the code execution status is true, jump to (next line of code + {self._offset} lines)"
         elif self._flags == 1:
-            return f"({intType:02X}) If the code execution status is false, jump to (next line of code + {self.offset} lines)"
+            return f"({intType:02X}) If the code execution status is false, jump to (next line of code + {self._offset} lines)"
         elif self._flags == 2:
-            return f"({intType:02X}) Jump to (next line of code + {self.offset} lines)"
+            return f"({intType:02X}) Jump to (next line of code + {self._offset} lines)"
 
     def __len__(self) -> int:
         return 8
@@ -2761,24 +2885,24 @@ class Goto(GeckoCommand):
 
     def as_bytes(self) -> bytes:
         intType = GeckoCommand.type_to_int(self.codetype)
-        metadata = (intType << 24) | (self._flags << 20) | self.offset
+        metadata = (intType << 24) | (self._flags << 20) | self._offset
         return metadata.to_bytes(4, "big", signed=False) + b"\x00\x00\x00\x00"
 
 
 class Gosub(GeckoCommand):
     def __init__(self, flags: int = 0, lineOffset: int = 0, register: int = 0):
         self._flags = flags
-        self.offset = lineOffset
+        self._offset = lineOffset
         self._register = register
 
     def __str__(self) -> str:
         intType = GeckoCommand.type_to_int(self.codetype)
         if self._flags == 0:
-            return f"({intType:02X}) If the code execution status is true, store the next code address in b{self._register} and jump to (next line of code + {self.offset} lines)"
+            return f"({intType:02X}) If the code execution status is true, store the next code address in b{self._register} and jump to (next line of code + {self._offset} lines)"
         elif self._flags == 1:
-            return f"({intType:02X}) If the code execution status is false, store the next code address in b{self._register} and jump to (next line of code + {self.offset} lines)"
+            return f"({intType:02X}) If the code execution status is false, store the next code address in b{self._register} and jump to (next line of code + {self._offset} lines)"
         elif self._flags == 2:
-            return f"({intType:02X}) Store the next code address in b{self._register} and jump to (next line of code + {self.offset} lines)"
+            return f"({intType:02X}) Store the next code address in b{self._register} and jump to (next line of code + {self._offset} lines)"
 
     def __len__(self) -> int:
         return 8
@@ -2792,7 +2916,7 @@ class Gosub(GeckoCommand):
 
     def as_bytes(self) -> bytes:
         intType = GeckoCommand.type_to_int(self.codetype)
-        metadata = (intType << 24) | (self._flags << 20) | self.offset
+        metadata = (intType << 24) | (self._flags << 20) | self._offset
         info = self._register
         return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False)
 
@@ -2856,6 +2980,12 @@ class GeckoRegisterSet(GeckoCommand):
 
     def virtual_length(self) -> int:
         return 1
+
+    def is_ba_type(self) -> bool:
+        return not self._isPointer
+
+    def is_po_type(self) -> bool:
+        return self._isPointer
 
     def as_bytes(self) -> bytes:
         intType = GeckoCommand.type_to_int(self.codetype) | (
@@ -2928,6 +3058,12 @@ class GeckoRegisterLoad(GeckoCommand):
 
     def virtual_length(self) -> int:
         return 1
+
+    def is_ba_type(self) -> bool:
+        return not self._isPointer
+
+    def is_po_type(self) -> bool:
+        return self._isPointer
 
     def as_bytes(self) -> bytes:
         intType = GeckoCommand.type_to_int(self.codetype) | (
@@ -3005,6 +3141,12 @@ class GeckoRegisterStore(GeckoCommand):
 
     def virtual_length(self) -> int:
         return 1
+
+    def is_ba_type(self) -> bool:
+        return not self._isPointer
+
+    def is_po_type(self) -> bool:
+        return self._isPointer
 
     def as_bytes(self) -> bytes:
         intType = GeckoCommand.type_to_int(self.codetype) | (
@@ -3238,6 +3380,12 @@ class MemoryCopyTo(GeckoCommand):
     def virtual_length(self) -> int:
         return 1
 
+    def is_ba_type(self) -> bool:
+        return not self._isPointer
+
+    def is_po_type(self) -> bool:
+        return self._isPointer
+
     def as_bytes(self) -> bytes:
         intType = GeckoCommand.type_to_int(self.codetype) | (
             0x10 if self._isPointer else 0)
@@ -3304,6 +3452,12 @@ class MemoryCopyFrom(GeckoCommand):
 
     def virtual_length(self) -> int:
         return 1
+
+    def is_ba_type(self) -> bool:
+        return not self._isPointer
+
+    def is_po_type(self) -> bool:
+        return self._isPointer
 
     def as_bytes(self) -> bytes:
         intType = GeckoCommand.type_to_int(self.codetype) | (
@@ -3377,6 +3531,12 @@ class GeckoIfEqual16(GeckoCommand):
 
     def virtual_length(self) -> int:
         return len(self.children) + 1
+
+    def is_ba_type(self) -> bool:
+        return not self._isPointer
+
+    def is_po_type(self) -> bool:
+        return self._isPointer
 
     def populate_from_bytes(self, f: BinaryIO):
         code = GeckoCommand.bytes_to_geckocommand(f)
@@ -3461,6 +3621,12 @@ class GeckoIfNotEqual16(GeckoCommand):
     def virtual_length(self) -> int:
         return len(self.children) + 1
 
+    def is_ba_type(self) -> bool:
+        return not self._isPointer
+
+    def is_po_type(self) -> bool:
+        return self._isPointer
+
     def populate_from_bytes(self, f: BinaryIO):
         code = GeckoCommand.bytes_to_geckocommand(f)
         while code != Terminator:
@@ -3544,6 +3710,12 @@ class GeckoIfGreaterThan16(GeckoCommand):
     def virtual_length(self) -> int:
         return len(self.children) + 1
 
+    def is_ba_type(self) -> bool:
+        return not self._isPointer
+
+    def is_po_type(self) -> bool:
+        return self._isPointer
+
     def populate_from_bytes(self, f: BinaryIO):
         code = GeckoCommand.bytes_to_geckocommand(f)
         while code != Terminator:
@@ -3626,6 +3798,12 @@ class GeckoIfLesserThan16(GeckoCommand):
 
     def virtual_length(self) -> int:
         return len(self.children) + 1
+
+    def is_ba_type(self) -> bool:
+        return not self._isPointer
+
+    def is_po_type(self) -> bool:
+        return self._isPointer
 
     def populate_from_bytes(self, f: BinaryIO):
         code = GeckoCommand.bytes_to_geckocommand(f)
@@ -4066,6 +4244,12 @@ class AsmInsert(GeckoCommand):
     def virtual_length(self) -> int:
         return ((len(self) + 7) & -0x8) >> 3
 
+    def is_ba_type(self) -> bool:
+        return not self._isPointer
+
+    def is_po_type(self) -> bool:
+        return self._isPointer
+
     def as_bytes(self) -> bytes:
         intType = GeckoCommand.type_to_int(self.codetype) | (
             0x10 if self._isPointer else 0)
@@ -4104,17 +4288,23 @@ class AsmInsertLink(GeckoCommand):
 
     @property
     def value(self) -> bytes:
-        return self._value
-
-    @value.setter
-    def value(self, value: bytes):
         length = len(self._value)
         if length % 8 == 0 and length != 0:
             return self._value + b"\x60\x00\x00\x00"
         return self._value
 
+    @value.setter
+    def value(self, value: bytes):
+        self._value = value
+
     def virtual_length(self) -> int:
         return ((len(self) + 7) & -0x8) >> 3
+
+    def is_ba_type(self) -> bool:
+        return not self._isPointer
+
+    def is_po_type(self) -> bool:
+        return self._isPointer
 
     def as_bytes(self) -> bytes:
         intType = GeckoCommand.type_to_int(self.codetype) | (
@@ -4171,6 +4361,12 @@ class WriteBranch(GeckoCommand):
 
     def virtual_length(self) -> int:
         return 1
+
+    def is_ba_type(self) -> bool:
+        return not self._isPointer
+
+    def is_po_type(self) -> bool:
+        return self._isPointer
 
     def apply(self, dol: DolFile) -> bool:
         addr = self._address | 0x80000000
@@ -4262,6 +4458,12 @@ class AddressRangeCheck(GeckoCommand):
     def virtual_length(self) -> int:
         return 1
 
+    def is_ba_type(self) -> bool:
+        return not self._isPointer
+
+    def is_po_type(self) -> bool:
+        return self._isPointer
+
     def as_bytes(self) -> bytes:
         intType = GeckoCommand.type_to_int(self.codetype) | (
             0x10 if self._isPointer else 0)
@@ -4337,8 +4539,8 @@ class Endif(GeckoCommand):
 
     def __str__(self) -> str:
         intType = GeckoCommand.type_to_int(self.codetype)
-        baStr = f" Set the base address to {self[0]:08X}." if self[0] != 0 else ""
-        poStr = f" Set the pointer address to {self[1]:08X}." if self[1] != 0 else ""
+        baStr = f" Set the base address to 0x{self[0]:08X}." if self[0] != 0 else ""
+        poStr = f" Set the pointer address to 0x{self[1]:08X}." if self[1] != 0 else ""
         elseStr = "Inverse the code execution status (else) " if self._asElse else ""
         endif = "(Apply Endif) " if self._endifNum == 1 else f"(Apply {self._endifNum} Endifs) "
         return f"({intType:02X}) {endif}{elseStr}{baStr}{poStr}"
@@ -4451,6 +4653,12 @@ class AsmInsertXOR(GeckoCommand):
 
     def virtual_length(self) -> int:
         return ((len(self) + 7) & -0x8) >> 3
+
+    def is_ba_type(self) -> bool:
+        return not self._isPointer
+
+    def is_po_type(self) -> bool:
+        return self._isPointer
 
     def as_bytes(self) -> bytes:
         intType = GeckoCommand.type_to_int(self.codetype) + (
@@ -4625,8 +4833,9 @@ class GeckoCode(object):
         if not isinstance(other, GeckoCommand):
             raise TypeError(
                 f"{other.__class__.__name__} cannot be added to a {self.__class__.__name__}")
-        
-        code = GeckoCode(self.name, self.author, self.desc, self._commands.copy(), self._enabled)
+
+        code = GeckoCode(self.name, self.author, self.desc,
+                         self._commands.copy(), self._enabled)
         code.add_child(other)
         return code
 
