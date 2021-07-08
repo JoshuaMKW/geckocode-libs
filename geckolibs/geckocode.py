@@ -905,7 +905,7 @@ class GeckoCommand(object):
             data = b""
             for _ in range(size):
                 data += bytes.fromhex("".join(f.readline().strip().split()))
-            return AsmInsert(data, address, isPointerType)
+            return AsmInsert(data, address, isPointerType, isLink=(address & 1) != 0)
         elif codetype == GeckoCommand.Type.WRITE_BRANCH:
             info = bytes.fromhex(line[-8:])
             dest = int.from_bytes(info, "big", signed=False)
@@ -940,7 +940,7 @@ class GeckoCommand(object):
             data = b""
             for _ in range(size):
                 data += bytes.fromhex("".join(f.readline().strip().split()))
-            return AsmInsertXOR(data, address, pointer, xor, num)
+            return AsmInsertXOR(data, address, pointer, xor, num, isLink=(address & 1) != 0)
         elif codetype == GeckoCommand.Type.BRAINSLUG_SEARCH:
             info = bytes.fromhex(line[-8:])
             value = int.from_bytes(info, "big", signed=False)
