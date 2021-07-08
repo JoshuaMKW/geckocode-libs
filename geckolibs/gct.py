@@ -143,13 +143,15 @@ class GeckoCodeTable(object):
 
         gct = cls()
         enabledCodes = set()
+        _foundEnabled = False
 
         mode = GeckoCodeTable.detect_codelist_type(f)
         if mode == GeckoTextType.DOLPHIN:
             f.seek(0)
-            while True:
+            while f.tell() < len(f.getvalue()):
                 line = f.readline().strip()
                 if line == "[Gecko_Enabled]":
+                    _foundEnabled = True
                     line = f.readline().strip()
                     while line.startswith("$"):
                         enabledCodes.add(line[1:].strip())
@@ -172,7 +174,7 @@ class GeckoCodeTable(object):
                 elif line.startswith("$"):
                     if len(data) > 0:
                         code = GeckoCode.from_text(
-                            "\n".join(data).strip(), name.strip(), author, "\n".join(desc), enabled=(name in enabledCodes))
+                            "\n".join(data).strip(), name.strip(), author, "\n".join(desc), enabled=(name in enabledCodes or not _foundEnabled))
                         gct.add_child(code)
                         data.clear()
                         desc.clear()
@@ -208,20 +210,28 @@ class GeckoCodeTable(object):
                 else:
                     name = sLine[:-n].strip()
                     author = sLine[-n+1:-1].strip()
-                while True:
+
+                _firstPass = True
+                _enabled = False
+                _descReading = False
+                while f.tell() < len(f.getvalue()):
                     sLine = f.readline().strip()
-                    if sLine.startswith("*"):
+                    if _firstPass:
+                        _enabled = sLine.startswith("*")
+                    elif len(sLine.lstrip("*").strip()) == 17 and not _descReading:
                         data.append(f"{sLine[1:].strip()}")
                     elif sLine != "":
+                        _descReading = True
                         desc.append(sLine)
                     else:
                         gct.add_child(GeckoCode.from_text(
-                            "\n".join(data), name, author, "\n".join(desc)))
+                            "\n".join(data), name, author, "\n".join(desc), _enabled))
                         name = ""
                         author = ""
                         desc.clear()
                         data.clear()
                         break
+                    _firstPass = False
             else:
                 if sLine != "":
                     data.append(sLine)
