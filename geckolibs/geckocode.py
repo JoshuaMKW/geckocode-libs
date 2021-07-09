@@ -528,11 +528,11 @@ class GeckoCommand(object):
         elif codetype == GeckoCommand.Type.ASM_INSERT:
             info = f.read(4)
             size = int.from_bytes(info, "big", signed=False)
-            return AsmInsert(f.read(size << 3), address, isPointerType)
+            return AsmInsert(f.read(size << 3), address, isPointerType, isLink=(address & 1) != 0)
         elif codetype == GeckoCommand.Type.WRITE_BRANCH:
             info = f.read(4)
             dest = int.from_bytes(info, "big", signed=False)
-            return WriteBranch(dest, address, isPointerType)
+            return WriteBranch(dest, address, isPointerType, isLink=(address & 1) != 0)
         elif codetype == GeckoCommand.Type.SWITCH:
             return Switch()
         elif codetype == GeckoCommand.Type.ADDR_RANGE_CHECK:
@@ -560,7 +560,7 @@ class GeckoCommand(object):
             xor = int.from_bytes(info, "big", signed=False) & 0x00FFFF00
             num = int.from_bytes(info, "big", signed=False) & 0xFF000000
             pointer = codetype.value == 0xF4
-            return AsmInsertXOR(f.read(size << 3), address, pointer, xor, num)
+            return AsmInsertXOR(f.read(size << 3), address, pointer, xor, num, isLink=(address & 1) != 0)
         elif codetype == GeckoCommand.Type.BRAINSLUG_SEARCH:
             info = f.read(4)
             value = int.from_bytes(info, "big", signed=False)
@@ -909,7 +909,7 @@ class GeckoCommand(object):
         elif codetype == GeckoCommand.Type.WRITE_BRANCH:
             info = bytes.fromhex(line[-8:])
             dest = int.from_bytes(info, "big", signed=False)
-            return WriteBranch(dest, address, isPointerType)
+            return WriteBranch(dest, address, isPointerType, isLink=(address & 1) != 0)
         elif codetype == GeckoCommand.Type.SWITCH:
             return Switch()
         elif codetype == GeckoCommand.Type.ADDR_RANGE_CHECK:
@@ -3894,7 +3894,7 @@ class CounterIfEqual16(GeckoCommand):
         ty = "(Resets counter if true) " if (self._flags &
                                              0x8) != 0 else "(Resets counter if false) "
         endif = "(Apply Endif) " if (self._flags & 0x1) != 0 else ""
-        return f"({intType:02X}) {endif} {ty}If (0x{self.value:08X} & ~0x{self._mask:04X}) is equal to {self._counter}:{childrenPrint}"
+        return f"({intType:02X}) {endif}{ty}If (0x{self.value:08X} & ~0x{self._mask:04X}) is equal to {self._counter}:{childrenPrint}"
 
     def __getitem__(self, index: int) -> GeckoCommand:
         return self._children[index]
@@ -3982,7 +3982,7 @@ class CounterIfNotEqual16(GeckoCommand):
         ty = "(Resets counter if true) " if (self._flags &
                                              0x8) != 0 else "(Resets counter if false) "
         endif = "(Apply Endif) " if (self._flags & 0x1) != 0 else ""
-        return f"({intType:02X}) {endif} {ty}If (0x{self.value:08X} & ~0x{self._mask:04X}) is not equal to {self._counter}:{childrenPrint}"
+        return f"({intType:02X}) {endif}{ty}If (0x{self.value:08X} & ~0x{self._mask:04X}) is not equal to {self._counter}:{childrenPrint}"
 
     def __getitem__(self, index: int) -> GeckoCommand:
         return self._children[index]
@@ -4070,7 +4070,7 @@ class CounterIfGreaterThan16(GeckoCommand):
         ty = "(Resets counter if true) " if (self._flags &
                                              0x8) != 0 else "(Resets counter if false) "
         endif = "(Apply Endif) " if (self._flags & 0x1) != 0 else ""
-        return f"({intType:02X}) {endif} {ty}If (0x{self.value:08X} & ~0x{self._mask:04X}) is greater than {self._counter}:{childrenPrint}"
+        return f"({intType:02X}) {endif}{ty}If (0x{self.value:08X} & ~0x{self._mask:04X}) is greater than {self._counter}:{childrenPrint}"
 
     def __getitem__(self, index: int) -> GeckoCommand:
         return self._children[index]
@@ -4158,7 +4158,7 @@ class CounterIfLesserThan16(GeckoCommand):
         ty = "(Resets counter if true) " if (self._flags &
                                              0x8) != 0 else "(Resets counter if false) "
         endif = "(Apply Endif) " if (self._flags & 0x1) != 0 else ""
-        return f"({intType:02X}) {endif} {ty}If (0x{self.value:08X} & ~0x{self._mask:04X}) is less than {self._counter}:{childrenPrint}"
+        return f"({intType:02X}) {endif}{ty}If (0x{self.value:08X} & ~0x{self._mask:04X}) is less than {self._counter}:{childrenPrint}"
 
     def __getitem__(self, index: int) -> GeckoCommand:
         return self._children[index]
@@ -4322,10 +4322,11 @@ class AsmInsert(GeckoCommand):
 
 
 class WriteBranch(GeckoCommand):
-    def __init__(self, value: Union[int, bytes], address: int = 0, isPointer: bool = False):
+    def __init__(self, value: Union[int, bytes], address: int = 0, isPointer: bool = False, isLink: bool = False):
         self.value = value
-        self._address = address & 0x1FFFFFF
+        self._address = address & 0x1FFFFFC
         self._isPointer = isPointer
+        self._isLink = isLink
 
     def __len__(self) -> int:
         return 8
@@ -4334,7 +4335,8 @@ class WriteBranch(GeckoCommand):
         intType = GeckoCommand.type_to_int(self.codetype) | (
             0x10 if self._isPointer else 0)
         addrstr = "pointer address" if self._isPointer else "base address"
-        return f"({intType:02X}) Write a translated branch at (0x{self._address:08X} + the {addrstr}) to 0x{self.value:08X}"
+        linking = "linking " if self._isLink else ""
+        return f"({intType:02X}) Write a translated {linking}branch at (0x{self._address:08X} + the {addrstr}) to 0x{self.value:08X}"
 
     def __getitem__(self, index: int) -> int:
         if index != 0:
@@ -4386,7 +4388,7 @@ class WriteBranch(GeckoCommand):
     def as_bytes(self) -> bytes:
         intType = GeckoCommand.type_to_int(self.codetype) | (
             0x10 if self._isPointer else 0)
-        metadata = (intType << 24) | (self._address & 0x1FFFFFC)
+        metadata = (intType << 24) | (self._address & 0x1FFFFFC) | (1 if self._isLink else 0)
         info = self.value
         return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False)
 
