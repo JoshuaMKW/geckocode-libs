@@ -63,6 +63,7 @@ class GeckoCommand(object):
     """
     _IndentionWidth = 4
     _IndentionStart = 0
+    _EndifDepth = 0
 
     class Type(Enum):
         WRITE_8 = 0x00
@@ -179,7 +180,6 @@ class GeckoCommand(object):
             GeckoCommand.Type.WRITE_SERIAL,
             GeckoCommand.Type.ASM_EXECUTE,
             GeckoCommand.Type.ASM_INSERT,
-            GeckoCommand.Type.ASM_INSERT_L,
             GeckoCommand.Type.ASM_INSERT_XOR,
             GeckoCommand.Type.BRAINSLUG_SEARCH
         }
@@ -207,368 +207,381 @@ class GeckoCommand(object):
         return code.codetype
 
     @staticmethod
-    def bytes_to_geckocommand(f: Union[BinaryIO, bytes]) -> "GeckoCommand":
-        def add_children_till_terminator(code: "GeckoCommand", f: BytesIO):
-            while f.tell() < len(f.getvalue()):
-                child = GeckoCommand.bytes_to_geckocommand(f)
-                if child.codetype in {GeckoCommand.Type.TERMINATOR, GeckoCommand.Type.EXIT}:
-                    f.seek(-8, 1)
-                    return
-                code.add_child(child)
+    def bytes_to_geckocommand(f: Union[BinaryIO, bytes], endifCounter: int) -> "GeckoCommand":
+        def _convert(f: Union[BinaryIO, bytes]) -> "GeckoCommand":
+            metadata = f.read(4)
+            address = int.from_bytes(
+                metadata, byteorder="big", signed=False) & 0x1FFFFFF
+            codetype = GeckoCommand.int_to_type((int.from_bytes(
+                metadata, "big", signed=False) >> 24) & 0xFE)
+            isPointerType = ((int.from_bytes(
+                metadata, "big", signed=False) >> 24) & 0x10 != 0)
 
-        if not isinstance(f, BytesIO):
+            if codetype == GeckoCommand.Type.WRITE_8:
+                info = f.read(4)
+                value = int.from_bytes(info[3:], "big", signed=False)
+                repeat = int.from_bytes(info[:2], "big", signed=False)
+                return Write8(value, address, repeat, isPointerType)
+            elif codetype == GeckoCommand.Type.WRITE_16:
+                info = f.read(4)
+                value = int.from_bytes(info[2:], "big", signed=False)
+                repeat = int.from_bytes(info[:2], "big", signed=False)
+                return Write16(value, address, repeat, isPointerType)
+            elif codetype == GeckoCommand.Type.WRITE_32:
+                info = f.read(4)
+                value = int.from_bytes(info, "big", signed=False)
+                return Write32(value, address, isPointerType)
+            elif codetype == GeckoCommand.Type.WRITE_STR:
+                size = int.from_bytes(f.read(4), "big", signed=False)
+                code = WriteString(f.read(size), address, isPointerType)
+                f.seek(((size + 7) & -8) - size, 1)
+                return code
+            elif codetype == GeckoCommand.Type.WRITE_SERIAL:
+                info = f.read(12)
+                value = int.from_bytes(info[:4], "big", signed=False)
+                valueSize = int.from_bytes(info[4:5], "big", signed=False) >> 4
+                repeat = int.from_bytes(info[4:5], "big", signed=False) & 0xF
+                addressInc = int.from_bytes(info[6:8], "big", signed=False)
+                valueInc = int.from_bytes(info[8:], "big", signed=False)
+                return WriteSerial(value, address, repeat, isPointerType, valueSize, addressInc, valueInc)
+            elif codetype == GeckoCommand.Type.IF_EQ_32:
+                info = f.read(4)
+                value = int.from_bytes(info, "big", signed=False)
+                _code = IfEqual32(value, address, endif=(address & 1) == 1)
+                _code._EndifDepth = endifCounter
+                _code.populate_from_bytes(f)
+                return _code
+            elif codetype == GeckoCommand.Type.IF_NEQ_32:
+                info = f.read(4)
+                value = int.from_bytes(info, "big", signed=False)
+                _code = IfNotEqual32(value, address, endif=(address & 1) == 1)
+                _code._EndifDepth = endifCounter
+                _code.populate_from_bytes(f)
+                return _code
+            elif codetype == GeckoCommand.Type.IF_GT_32:
+                info = f.read(4)
+                value = int.from_bytes(info, "big", signed=False)
+                _code = IfGreaterThan32(value, address, endif=(address & 1) == 1)
+                _code._EndifDepth = endifCounter
+                _code.populate_from_bytes(f)
+                return _code
+            elif codetype == GeckoCommand.Type.IF_LT_32:
+                info = f.read(4)
+                value = int.from_bytes(info, "big", signed=False)
+                _code = IfLesserThan32(value, address, endif=(address & 1) == 1)
+                _code._EndifDepth = endifCounter
+                _code.populate_from_bytes(f)
+                return _code
+            elif codetype == GeckoCommand.Type.IF_EQ_16:
+                info = f.read(4)
+                value = int.from_bytes(info, "big", signed=False) & 0xFFFF
+                mask = (int.from_bytes(info, "big", signed=False) >> 16) & 0xFFFF
+                _code = IfEqual16(value, address, endif=(
+                    address & 1) == 1, mask=mask)
+                _code._EndifDepth = endifCounter
+                _code.populate_from_bytes(f)
+                return _code
+            elif codetype == GeckoCommand.Type.IF_NEQ_16:
+                info = f.read(4)
+                value = int.from_bytes(info, "big", signed=False) & 0xFFFF
+                mask = (int.from_bytes(info, "big", signed=False) >> 16) & 0xFFFF
+                _code = IfNotEqual16(value, address, endif=(
+                    address & 1) == 1, mask=mask)
+                _code._EndifDepth = endifCounter
+                _code.populate_from_bytes(f)
+                return _code
+            elif codetype == GeckoCommand.Type.IF_GT_16:
+                info = f.read(4)
+                value = int.from_bytes(info, "big", signed=False) & 0xFFFF
+                mask = (int.from_bytes(info, "big", signed=False) >> 16) & 0xFFFF
+                _code = IfGreaterThan16(
+                    value, address, endif=(address & 1) == 1, mask=mask)
+                _code._EndifDepth = endifCounter
+                _code.populate_from_bytes(f)
+                return _code
+            elif codetype == GeckoCommand.Type.IF_LT_16:
+                info = f.read(4)
+                value = int.from_bytes(info, "big", signed=False) & 0xFFFF
+                mask = (int.from_bytes(info, "big", signed=False) >> 16) & 0xFFFF
+                _code = IfLesserThan16(
+                    value, address, endif=(address & 1) == 1, mask=mask)
+                _code._EndifDepth = endifCounter
+                _code.populate_from_bytes(f)
+                return _code
+            elif codetype == GeckoCommand.Type.BASE_ADDR_LOAD:
+                info = f.read(4)
+                value = int.from_bytes(info, "big", signed=False)
+                flags = int.from_bytes(metadata, "big", signed=False)
+                return BaseAddressLoad(value, flags & 0x01110000, flags & 0xF, isPointerType)
+            elif codetype == GeckoCommand.Type.BASE_ADDR_SET:
+                info = f.read(4)
+                value = int.from_bytes(info, "big", signed=False)
+                flags = int.from_bytes(metadata, "big", signed=False)
+                return BaseAddressSet(value, flags & 0x01110000, flags & 0xF, isPointerType)
+            elif codetype == GeckoCommand.Type.BASE_ADDR_STORE:
+                info = f.read(4)
+                value = int.from_bytes(info, "big", signed=False)
+                flags = int.from_bytes(metadata, "big", signed=False)
+                return BaseAddressStore(value, flags & 0x00110000, flags & 0xF, isPointerType)
+            elif codetype == GeckoCommand.Type.BASE_GET_NEXT:
+                info = f.read(4)
+                value = int.from_bytes(info, "big", signed=False)
+                flags = int.from_bytes(metadata, "big", signed=False)
+                return BaseAddressGetNext(value)
+            elif codetype == GeckoCommand.Type.PTR_ADDR_LOAD:
+                info = f.read(4)
+                value = int.from_bytes(info, "big", signed=False)
+                flags = int.from_bytes(metadata, "big", signed=False)
+                return PointerAddressLoad(value, flags & 0x01110000, flags & 0xF, isPointerType)
+            elif codetype == GeckoCommand.Type.PTR_ADDR_SET:
+                info = f.read(4)
+                value = int.from_bytes(info, "big", signed=False)
+                flags = int.from_bytes(metadata, "big", signed=False)
+                return PointerAddressSet(value, flags & 0x01110000, flags & 0xF, isPointerType)
+            elif codetype == GeckoCommand.Type.PTR_ADDR_STORE:
+                info = f.read(4)
+                value = int.from_bytes(info, "big", signed=False)
+                flags = int.from_bytes(metadata, "big", signed=False)
+                return PointerAddressStore(value, flags & 0x00110000, flags & 0xF, isPointerType)
+            elif codetype == GeckoCommand.Type.PTR_GET_NEXT:
+                info = f.read(4)
+                value = int.from_bytes(info, "big", signed=False)
+                flags = int.from_bytes(metadata, "big", signed=False)
+                return PointerAddressGetNext(value)
+            elif codetype == GeckoCommand.Type.REPEAT_SET:
+                info = f.read(4)
+                value = int.from_bytes(info, "big", signed=False) & 0xF
+                repeat = int.from_bytes(metadata, "big", signed=False) & 0xFFFF
+                return SetRepeat(repeat, value)
+            elif codetype == GeckoCommand.Type.REPEAT_EXEC:
+                info = f.read(4)
+                value = int.from_bytes(info, "big", signed=False) & 0xF
+                return ExecuteRepeat(value)
+            elif codetype == GeckoCommand.Type.RETURN:
+                info = f.read(4)
+                value = int.from_bytes(info, "big", signed=False) & 0xF
+                flags = (int.from_bytes(metadata, "big",
+                                        signed=False) & 0x00300000) >> 20
+                return Return(value)
+            elif codetype == GeckoCommand.Type.GOTO:
+                info = f.read(4)
+                value = int.from_bytes(metadata, "big", signed=False) & 0xFFFF
+                flags = (int.from_bytes(metadata, "big",
+                                        signed=False) & 0x00300000) >> 20
+                return Goto(flags, value)
+            elif codetype == GeckoCommand.Type.GOSUB:
+                info = f.read(4)
+                value = int.from_bytes(metadata, "big", signed=False) & 0xFFFF
+                flags = (int.from_bytes(metadata, "big",
+                                        signed=False) & 0x00300000) >> 20
+                register = int.from_bytes(info, "big", signed=False) & 0xF
+                return Gosub(flags, value, register)
+            elif codetype == GeckoCommand.Type.GECKO_REG_SET:
+                info = f.read(4)
+                value = int.from_bytes(info, "big", signed=False)
+                flags = (int.from_bytes(metadata, "big",
+                                        signed=False) & 0x00110000) >> 16
+                register = int.from_bytes(metadata, "big", signed=False) & 0xF
+                return GeckoRegisterSet(value, flags, register, isPointerType)
+            elif codetype == GeckoCommand.Type.GECKO_REG_LOAD:
+                info = f.read(4)
+                value = int.from_bytes(info, "big", signed=False)
+                flags = (int.from_bytes(metadata, "big",
+                                        signed=False) & 0x00310000) >> 16
+                register = int.from_bytes(metadata, "big", signed=False) & 0xF
+                return GeckoRegisterLoad(value, flags, register, isPointerType)
+            elif codetype == GeckoCommand.Type.GECKO_REG_STORE:
+                info = f.read(4)
+                value = int.from_bytes(info, "big", signed=False)
+                flags = (int.from_bytes(metadata, "big",
+                                        signed=False) & 0x00310000) >> 16
+                register = int.from_bytes(metadata, "big", signed=False) & 0xF
+                repeat = (int.from_bytes(metadata, "big",
+                                        signed=False) & 0xFFF0) >> 4
+                return GeckoRegisterStore(value, repeat, flags, register, isPointerType)
+            elif codetype == GeckoCommand.Type.GECKO_REG_OPERATE_I:
+                info = f.read(4)
+                value = int.from_bytes(info, "big", signed=False)
+                flags = (int.from_bytes(metadata, "big",
+                                        signed=False) & 0x00030000) >> 16
+                register = int.from_bytes(metadata, "big", signed=False) & 0xF
+                opType = GeckoCommand.ArithmeticType(
+                    (int.from_bytes(metadata, "big", signed=False) & 0x00F00000) >> 18)
+                return GeckoRegisterOperateI(value, opType, flags, register)
+            elif codetype == GeckoCommand.Type.GECKO_REG_OPERATE:
+                info = f.read(4)
+                value = int.from_bytes(info, "big", signed=False) & 0xF
+                flags = (int.from_bytes(metadata, "big",
+                                        signed=False) & 0x00030000) >> 16
+                register = int.from_bytes(metadata, "big", signed=False) & 0xF
+                opType = GeckoCommand.ArithmeticType(
+                    (int.from_bytes(metadata, "big", signed=False) & 0x00F00000) >> 18)
+                return GeckoRegisterOperate(value, opType, flags, register)
+            elif codetype == GeckoCommand.Type.MEMCPY_1:
+                info = f.read(4)
+                value = int.from_bytes(info, "big", signed=False)
+                size = (int.from_bytes(metadata, "big",
+                                    signed=False) & 0x00FFFF00) >> 8
+                register = (int.from_bytes(
+                    metadata, "big", signed=False) & 0xF0) >> 4
+                otherRegister = int.from_bytes(metadata, "big", signed=False) & 0xF
+                return MemoryCopyTo(value, size, otherRegister, register, isPointerType)
+            elif codetype == GeckoCommand.Type.MEMCPY_2:
+                info = f.read(4)
+                value = int.from_bytes(info, "big", signed=False)
+                size = (int.from_bytes(metadata, "big",
+                                    signed=False) & 0x00FFFF00) >> 8
+                register = (int.from_bytes(
+                    metadata, "big", signed=False) & 0xF0) >> 4
+                otherRegister = int.from_bytes(metadata, "big", signed=False) & 0xF
+                return MemoryCopyFrom(value, size, otherRegister, register, isPointerType)
+            elif codetype == GeckoCommand.Type.GECKO_IF_EQ_16:
+                info = f.read(4)
+                register = (int.from_bytes(info, "big", signed=False)
+                            & 0x0F000000) >> 24
+                otherRegister = (int.from_bytes(
+                    info, "big", signed=False) & 0xF0000000) >> 28
+                mask = int.from_bytes(info, "big", signed=False) & 0xFFFF
+                _code = GeckoIfEqual16(
+                    address, register, otherRegister, isPointerType, (address & 1) == 1, mask)
+                _code._EndifDepth = endifCounter
+                _code.populate_from_bytes(f)
+                return _code
+            elif codetype == GeckoCommand.Type.GECKO_IF_NEQ_16:
+                info = f.read(4)
+                register = (int.from_bytes(info, "big", signed=False)
+                            & 0x0F000000) >> 24
+                otherRegister = (int.from_bytes(
+                    info, "big", signed=False) & 0xF0000000) >> 28
+                mask = int.from_bytes(info, "big", signed=False) & 0xFFFF
+                _code = GeckoIfNotEqual16(
+                    address, register, otherRegister, isPointerType, (address & 1) == 1, mask)
+                _code._EndifDepth = endifCounter
+                _code.populate_from_bytes(f)
+                return _code
+            elif codetype == GeckoCommand.Type.GECKO_IF_GT_16:
+                info = f.read(4)
+                register = (int.from_bytes(info, "big", signed=False)
+                            & 0x0F000000) >> 24
+                otherRegister = (int.from_bytes(
+                    info, "big", signed=False) & 0xF0000000) >> 28
+                mask = int.from_bytes(info, "big", signed=False) & 0xFFFF
+                _code = GeckoIfGreaterThan16(
+                    address, register, otherRegister, isPointerType, (address & 1) == 1, mask)
+                _code._EndifDepth = endifCounter
+                _code.populate_from_bytes(f)
+                return _code
+            elif codetype == GeckoCommand.Type.GECKO_IF_LT_16:
+                info = f.read(4)
+                register = (int.from_bytes(info, "big", signed=False)
+                            & 0x0F000000) >> 24
+                otherRegister = (int.from_bytes(
+                    info, "big", signed=False) & 0xF0000000) >> 28
+                mask = int.from_bytes(info, "big", signed=False) & 0xFFFF
+                _code = GeckoIfLesserThan16(
+                    address, register, otherRegister, isPointerType, (address & 1) == 1, mask)
+                _code._EndifDepth = endifCounter
+                _code.populate_from_bytes(f)
+                return _code
+            elif codetype == GeckoCommand.Type.COUNTER_IF_EQ_16:
+                info = f.read(4)
+                counter = (int.from_bytes(metadata, "big",
+                                        signed=False) & 0xFFFF0) >> 4
+                flags = int.from_bytes(metadata, "big", signed=False) & 9
+                mask = (int.from_bytes(info, "big", signed=False) & 0xFFFF0000) >> 16
+                value = int.from_bytes(info, "big", signed=False) & 0xFFFF
+                _code = CounterIfEqual16(value, mask, flags, counter)
+                _code._EndifDepth = endifCounter
+                _code.populate_from_bytes(f)
+                return _code
+            elif codetype == GeckoCommand.Type.COUNTER_IF_NEQ_16:
+                info = f.read(4)
+                counter = (int.from_bytes(metadata, "big",
+                                        signed=False) & 0xFFFF0) >> 4
+                flags = int.from_bytes(metadata, "big", signed=False) & 9
+                mask = (int.from_bytes(info, "big", signed=False) & 0xFFFF0000) >> 16
+                value = int.from_bytes(info, "big", signed=False) & 0xFFFF
+                _code = CounterIfNotEqual16(value, mask, flags, counter)
+                _code._EndifDepth = endifCounter
+                _code.populate_from_bytes(f)
+                return _code
+            elif codetype == GeckoCommand.Type.COUNTER_IF_GT_16:
+                info = f.read(4)
+                counter = (int.from_bytes(metadata, "big",
+                                        signed=False) & 0xFFFF0) >> 4
+                flags = int.from_bytes(metadata, "big", signed=False) & 9
+                mask = (int.from_bytes(info, "big", signed=False) & 0xFFFF0000) >> 16
+                value = int.from_bytes(info, "big", signed=False) & 0xFFFF
+                _code = CounterIfGreaterThan16(value, mask, flags, counter)
+                _code._EndifDepth = endifCounter
+                _code.populate_from_bytes(f)
+                return _code
+            elif codetype == GeckoCommand.Type.COUNTER_IF_LT_16:
+                info = f.read(4)
+                counter = (int.from_bytes(metadata, "big",
+                                        signed=False) & 0xFFFF0) >> 4
+                flags = int.from_bytes(metadata, "big", signed=False) & 9
+                mask = (int.from_bytes(info, "big", signed=False) & 0xFFFF0000) >> 16
+                value = int.from_bytes(info, "big", signed=False) & 0xFFFF
+                _code = CounterIfLesserThan16(value, mask, flags, counter)
+                _code._EndifDepth = endifCounter
+                _code.populate_from_bytes(f)
+                return _code
+            elif codetype == GeckoCommand.Type.ASM_EXECUTE:
+                info = f.read(4)
+                size = int.from_bytes(info, "big", signed=False)
+                return AsmExecute(f.read(size << 3))
+            elif codetype == GeckoCommand.Type.ASM_INSERT:
+                info = f.read(4)
+                size = int.from_bytes(info, "big", signed=False)
+                return AsmInsert(f.read(size << 3), address, isPointerType, isLink=(address & 1) != 0)
+            elif codetype == GeckoCommand.Type.WRITE_BRANCH:
+                info = f.read(4)
+                dest = int.from_bytes(info, "big", signed=False)
+                return WriteBranch(dest, address, isPointerType, isLink=(address & 1) != 0)
+            elif codetype == GeckoCommand.Type.SWITCH:
+                return Switch()
+            elif codetype == GeckoCommand.Type.ADDR_RANGE_CHECK:
+                info = f.read(4)
+                value = int.from_bytes(info, "big", signed=False)
+                endif = int.from_bytes(metadata, "big", signed=False) & 0x1
+                return AddressRangeCheck(value, isPointerType, endif)
+            elif codetype == GeckoCommand.Type.TERMINATOR:
+                info = f.read(4)
+                value = int.from_bytes(info, "big", signed=False)
+                return Terminator(value)
+            elif codetype == GeckoCommand.Type.ENDIF:
+                info = f.read(4)
+                value = int.from_bytes(info, "big", signed=False)
+                inverse = (int.from_bytes(metadata, "big",
+                                        signed=False) & 0x00F00000) >> 24
+                numEndifs = int.from_bytes(metadata, "big", signed=False) & 0xFF
+                return Endif(value, inverse, numEndifs)
+            elif codetype == GeckoCommand.Type.EXIT:
+                f.seek(4, 1)
+                return Exit()
+            elif codetype == GeckoCommand.Type.ASM_INSERT_XOR:
+                info = f.read(4)
+                size = int.from_bytes(info, "big", signed=False) & 0x000000FF
+                xor = int.from_bytes(info, "big", signed=False) & 0x00FFFF00
+                num = int.from_bytes(info, "big", signed=False) & 0xFF000000
+                pointer = codetype.value == 0xF4
+                return AsmInsertXOR(f.read(size << 3), address, pointer, xor, num, isLink=(address & 1) != 0)
+            elif codetype == GeckoCommand.Type.BRAINSLUG_SEARCH:
+                info = f.read(4)
+                value = int.from_bytes(info, "big", signed=False)
+                size = int.from_bytes(metadata, "big", signed=False) & 0x000000FF
+                _code = BrainslugSearch(f.read(size << 3), address, [
+                                        (value & 0xFFFF0000) >> 16, value & 0xFFFF])
+                _code._EndifDepth = endifCounter
+                _code.populate_from_bytes(f)
+                return _code
+
+        if isinstance(f, bytes):
             f = BytesIO(f)
 
-        metadata = f.read(4)
-        address = int.from_bytes(
-            metadata, byteorder="big", signed=False) & 0x1FFFFFF
-        codetype = GeckoCommand.int_to_type((int.from_bytes(
-            metadata, "big", signed=False) >> 24) & 0xFE)
-        isPointerType = ((int.from_bytes(
-            metadata, "big", signed=False) >> 24) & 0x10 != 0)
+        return _convert(f)
 
-        if codetype == GeckoCommand.Type.WRITE_8:
-            info = f.read(4)
-            value = int.from_bytes(info[3:], "big", signed=False)
-            repeat = int.from_bytes(info[:2], "big", signed=False)
-            return Write8(value, address, repeat, isPointerType)
-        elif codetype == GeckoCommand.Type.WRITE_16:
-            info = f.read(4)
-            value = int.from_bytes(info[2:], "big", signed=False)
-            repeat = int.from_bytes(info[:2], "big", signed=False)
-            return Write16(value, address, repeat, isPointerType)
-        elif codetype == GeckoCommand.Type.WRITE_32:
-            info = f.read(4)
-            value = int.from_bytes(info, "big", signed=False)
-            return Write32(value, address, isPointerType)
-        elif codetype == GeckoCommand.Type.WRITE_STR:
-            size = int.from_bytes(f.read(4), "big", signed=False)
-            code = WriteString(f.read(size), address, isPointerType)
-            f.seek(((size + 7) & -8) - size, 1)
-            return code
-        elif codetype == GeckoCommand.Type.WRITE_SERIAL:
-            info = f.read(12)
-            value = int.from_bytes(info[:4], "big", signed=False)
-            valueSize = int.from_bytes(info[4:5], "big", signed=False) >> 4
-            repeat = int.from_bytes(info[4:5], "big", signed=False) & 0xF
-            addressInc = int.from_bytes(info[6:8], "big", signed=False)
-            valueInc = int.from_bytes(info[8:], "big", signed=False)
-            return WriteSerial(value, address, repeat, isPointerType, valueSize, addressInc, valueInc)
-        elif codetype == GeckoCommand.Type.IF_EQ_32:
-            info = f.read(4)
-            value = int.from_bytes(info, "big", signed=False)
-            _code = IfEqual32(value, address, endif=(address & 1) == 1)
-            add_children_till_terminator(_code, f)
-            return _code
-        elif codetype == GeckoCommand.Type.IF_NEQ_32:
-            info = f.read(4)
-            value = int.from_bytes(info, "big", signed=False)
-            _code = IfNotEqual32(value, address, endif=(address & 1) == 1)
-            add_children_till_terminator(_code, f)
-            return _code
-        elif codetype == GeckoCommand.Type.IF_GT_32:
-            info = f.read(4)
-            value = int.from_bytes(info, "big", signed=False)
-            _code = IfGreaterThan32(value, address, endif=(address & 1) == 1)
-            add_children_till_terminator(_code, f)
-            return _code
-        elif codetype == GeckoCommand.Type.IF_LT_32:
-            info = f.read(4)
-            value = int.from_bytes(info, "big", signed=False)
-            _code = IfLesserThan32(value, address, endif=(address & 1) == 1)
-            add_children_till_terminator(_code, f)
-            return _code
-        elif codetype == GeckoCommand.Type.IF_EQ_16:
-            info = f.read(4)
-            value = int.from_bytes(info, "big", signed=False) & 0xFFFF
-            mask = (int.from_bytes(info, "big", signed=False) >> 16) & 0xFFFF
-            _code = IfEqual16(value, address, endif=(
-                address & 1) == 1, mask=mask)
-            add_children_till_terminator(_code, f)
-            return _code
-        elif codetype == GeckoCommand.Type.IF_NEQ_16:
-            info = f.read(4)
-            value = int.from_bytes(info, "big", signed=False) & 0xFFFF
-            mask = (int.from_bytes(info, "big", signed=False) >> 16) & 0xFFFF
-            _code = IfNotEqual16(value, address, endif=(
-                address & 1) == 1, mask=mask)
-            add_children_till_terminator(_code, f)
-            return _code
-        elif codetype == GeckoCommand.Type.IF_GT_16:
-            info = f.read(4)
-            value = int.from_bytes(info, "big", signed=False) & 0xFFFF
-            mask = (int.from_bytes(info, "big", signed=False) >> 16) & 0xFFFF
-            _code = IfGreaterThan16(
-                value, address, endif=(address & 1) == 1, mask=mask)
-            add_children_till_terminator(_code, f)
-            return _code
-        elif codetype == GeckoCommand.Type.IF_LT_16:
-            info = f.read(4)
-            value = int.from_bytes(info, "big", signed=False) & 0xFFFF
-            mask = (int.from_bytes(info, "big", signed=False) >> 16) & 0xFFFF
-            _code = IfLesserThan16(
-                value, address, endif=(address & 1) == 1, mask=mask)
-            add_children_till_terminator(_code, f)
-            return _code
-        elif codetype == GeckoCommand.Type.BASE_ADDR_LOAD:
-            info = f.read(4)
-            value = int.from_bytes(info, "big", signed=False)
-            flags = int.from_bytes(metadata, "big", signed=False)
-            return BaseAddressLoad(value, flags & 0x01110000, flags & 0xF, isPointerType)
-        elif codetype == GeckoCommand.Type.BASE_ADDR_SET:
-            info = f.read(4)
-            value = int.from_bytes(info, "big", signed=False)
-            flags = int.from_bytes(metadata, "big", signed=False)
-            return BaseAddressSet(value, flags & 0x01110000, flags & 0xF, isPointerType)
-        elif codetype == GeckoCommand.Type.BASE_ADDR_STORE:
-            info = f.read(4)
-            value = int.from_bytes(info, "big", signed=False)
-            flags = int.from_bytes(metadata, "big", signed=False)
-            return BaseAddressStore(value, flags & 0x00110000, flags & 0xF, isPointerType)
-        elif codetype == GeckoCommand.Type.BASE_GET_NEXT:
-            info = f.read(4)
-            value = int.from_bytes(info, "big", signed=False)
-            flags = int.from_bytes(metadata, "big", signed=False)
-            return BaseAddressGetNext(value)
-        elif codetype == GeckoCommand.Type.PTR_ADDR_LOAD:
-            info = f.read(4)
-            value = int.from_bytes(info, "big", signed=False)
-            flags = int.from_bytes(metadata, "big", signed=False)
-            return PointerAddressLoad(value, flags & 0x01110000, flags & 0xF, isPointerType)
-        elif codetype == GeckoCommand.Type.PTR_ADDR_SET:
-            info = f.read(4)
-            value = int.from_bytes(info, "big", signed=False)
-            flags = int.from_bytes(metadata, "big", signed=False)
-            return PointerAddressSet(value, flags & 0x01110000, flags & 0xF, isPointerType)
-        elif codetype == GeckoCommand.Type.PTR_ADDR_STORE:
-            info = f.read(4)
-            value = int.from_bytes(info, "big", signed=False)
-            flags = int.from_bytes(metadata, "big", signed=False)
-            return PointerAddressStore(value, flags & 0x00110000, flags & 0xF, isPointerType)
-        elif codetype == GeckoCommand.Type.PTR_GET_NEXT:
-            info = f.read(4)
-            value = int.from_bytes(info, "big", signed=False)
-            flags = int.from_bytes(metadata, "big", signed=False)
-            return PointerAddressGetNext(value)
-        elif codetype == GeckoCommand.Type.REPEAT_SET:
-            info = f.read(4)
-            value = int.from_bytes(info, "big", signed=False) & 0xF
-            repeat = int.from_bytes(metadata, "big", signed=False) & 0xFFFF
-            return SetRepeat(repeat, value)
-        elif codetype == GeckoCommand.Type.REPEAT_EXEC:
-            info = f.read(4)
-            value = int.from_bytes(info, "big", signed=False) & 0xF
-            return ExecuteRepeat(value)
-        elif codetype == GeckoCommand.Type.RETURN:
-            info = f.read(4)
-            value = int.from_bytes(info, "big", signed=False) & 0xF
-            flags = (int.from_bytes(metadata, "big",
-                                    signed=False) & 0x00300000) >> 20
-            return Return(value)
-        elif codetype == GeckoCommand.Type.GOTO:
-            info = f.read(4)
-            value = int.from_bytes(metadata, "big", signed=False) & 0xFFFF
-            flags = (int.from_bytes(metadata, "big",
-                                    signed=False) & 0x00300000) >> 20
-            return Goto(flags, value)
-        elif codetype == GeckoCommand.Type.GOSUB:
-            info = f.read(4)
-            value = int.from_bytes(metadata, "big", signed=False) & 0xFFFF
-            flags = (int.from_bytes(metadata, "big",
-                                    signed=False) & 0x00300000) >> 20
-            register = int.from_bytes(info, "big", signed=False) & 0xF
-            return Gosub(flags, value, register)
-        elif codetype == GeckoCommand.Type.GECKO_REG_SET:
-            info = f.read(4)
-            value = int.from_bytes(info, "big", signed=False)
-            flags = (int.from_bytes(metadata, "big",
-                                    signed=False) & 0x00110000) >> 16
-            register = int.from_bytes(metadata, "big", signed=False) & 0xF
-            return GeckoRegisterSet(value, flags, register, isPointerType)
-        elif codetype == GeckoCommand.Type.GECKO_REG_LOAD:
-            info = f.read(4)
-            value = int.from_bytes(info, "big", signed=False)
-            flags = (int.from_bytes(metadata, "big",
-                                    signed=False) & 0x00310000) >> 16
-            register = int.from_bytes(metadata, "big", signed=False) & 0xF
-            return GeckoRegisterLoad(value, flags, register, isPointerType)
-        elif codetype == GeckoCommand.Type.GECKO_REG_STORE:
-            info = f.read(4)
-            value = int.from_bytes(info, "big", signed=False)
-            flags = (int.from_bytes(metadata, "big",
-                                    signed=False) & 0x00310000) >> 16
-            register = int.from_bytes(metadata, "big", signed=False) & 0xF
-            repeat = (int.from_bytes(metadata, "big",
-                                     signed=False) & 0xFFF0) >> 4
-            return GeckoRegisterStore(value, repeat, flags, register, isPointerType)
-        elif codetype == GeckoCommand.Type.GECKO_REG_OPERATE_I:
-            info = f.read(4)
-            value = int.from_bytes(info, "big", signed=False)
-            flags = (int.from_bytes(metadata, "big",
-                                    signed=False) & 0x00030000) >> 16
-            register = int.from_bytes(metadata, "big", signed=False) & 0xF
-            opType = GeckoCommand.ArithmeticType(
-                (int.from_bytes(metadata, "big", signed=False) & 0x00F00000) >> 18)
-            return GeckoRegisterOperateI(value, opType, flags, register)
-        elif codetype == GeckoCommand.Type.GECKO_REG_OPERATE:
-            info = f.read(4)
-            value = int.from_bytes(info, "big", signed=False) & 0xF
-            flags = (int.from_bytes(metadata, "big",
-                                    signed=False) & 0x00030000) >> 16
-            register = int.from_bytes(metadata, "big", signed=False) & 0xF
-            opType = GeckoCommand.ArithmeticType(
-                (int.from_bytes(metadata, "big", signed=False) & 0x00F00000) >> 18)
-            return GeckoRegisterOperate(value, opType, flags, register)
-        elif codetype == GeckoCommand.Type.MEMCPY_1:
-            info = f.read(4)
-            value = int.from_bytes(info, "big", signed=False)
-            size = (int.from_bytes(metadata, "big",
-                                   signed=False) & 0x00FFFF00) >> 8
-            register = (int.from_bytes(
-                metadata, "big", signed=False) & 0xF0) >> 4
-            otherRegister = int.from_bytes(metadata, "big", signed=False) & 0xF
-            return MemoryCopyTo(value, size, otherRegister, register, isPointerType)
-        elif codetype == GeckoCommand.Type.MEMCPY_2:
-            info = f.read(4)
-            value = int.from_bytes(info, "big", signed=False)
-            size = (int.from_bytes(metadata, "big",
-                                   signed=False) & 0x00FFFF00) >> 8
-            register = (int.from_bytes(
-                metadata, "big", signed=False) & 0xF0) >> 4
-            otherRegister = int.from_bytes(metadata, "big", signed=False) & 0xF
-            return MemoryCopyFrom(value, size, otherRegister, register, isPointerType)
-        elif codetype == GeckoCommand.Type.GECKO_IF_EQ_16:
-            info = f.read(4)
-            register = (int.from_bytes(info, "big", signed=False)
-                        & 0x0F000000) >> 24
-            otherRegister = (int.from_bytes(
-                info, "big", signed=False) & 0xF0000000) >> 28
-            mask = int.from_bytes(info, "big", signed=False) & 0xFFFF
-            _code = GeckoIfEqual16(
-                address, register, otherRegister, isPointerType, (address & 1) == 1, mask)
-            add_children_till_terminator(_code, f)
-            return _code
-        elif codetype == GeckoCommand.Type.GECKO_IF_NEQ_16:
-            info = f.read(4)
-            register = (int.from_bytes(info, "big", signed=False)
-                        & 0x0F000000) >> 24
-            otherRegister = (int.from_bytes(
-                info, "big", signed=False) & 0xF0000000) >> 28
-            mask = int.from_bytes(info, "big", signed=False) & 0xFFFF
-            _code = GeckoIfNotEqual16(
-                address, register, otherRegister, isPointerType, (address & 1) == 1, mask)
-            add_children_till_terminator(_code, f)
-            return _code
-        elif codetype == GeckoCommand.Type.GECKO_IF_GT_16:
-            info = f.read(4)
-            register = (int.from_bytes(info, "big", signed=False)
-                        & 0x0F000000) >> 24
-            otherRegister = (int.from_bytes(
-                info, "big", signed=False) & 0xF0000000) >> 28
-            mask = int.from_bytes(info, "big", signed=False) & 0xFFFF
-            _code = GeckoIfGreaterThan16(
-                address, register, otherRegister, isPointerType, (address & 1) == 1, mask)
-            add_children_till_terminator(_code, f)
-            return _code
-        elif codetype == GeckoCommand.Type.GECKO_IF_LT_16:
-            info = f.read(4)
-            register = (int.from_bytes(info, "big", signed=False)
-                        & 0x0F000000) >> 24
-            otherRegister = (int.from_bytes(
-                info, "big", signed=False) & 0xF0000000) >> 28
-            mask = int.from_bytes(info, "big", signed=False) & 0xFFFF
-            _code = GeckoIfLesserThan16(
-                address, register, otherRegister, isPointerType, (address & 1) == 1, mask)
-            add_children_till_terminator(_code, f)
-            return _code
-        elif codetype == GeckoCommand.Type.COUNTER_IF_EQ_16:
-            info = f.read(4)
-            counter = (int.from_bytes(metadata, "big",
-                                      signed=False) & 0xFFFF0) >> 4
-            flags = int.from_bytes(metadata, "big", signed=False) & 9
-            mask = (int.from_bytes(info, "big", signed=False) & 0xFFFF0000) >> 16
-            value = int.from_bytes(info, "big", signed=False) & 0xFFFF
-            _code = CounterIfEqual16(value, mask, flags, counter)
-            add_children_till_terminator(_code, f)
-            return _code
-        elif codetype == GeckoCommand.Type.COUNTER_IF_NEQ_16:
-            info = f.read(4)
-            counter = (int.from_bytes(metadata, "big",
-                                      signed=False) & 0xFFFF0) >> 4
-            flags = int.from_bytes(metadata, "big", signed=False) & 9
-            mask = (int.from_bytes(info, "big", signed=False) & 0xFFFF0000) >> 16
-            value = int.from_bytes(info, "big", signed=False) & 0xFFFF
-            _code = CounterIfNotEqual16(value, mask, flags, counter)
-            add_children_till_terminator(_code, f)
-            return _code
-        elif codetype == GeckoCommand.Type.COUNTER_IF_GT_16:
-            info = f.read(4)
-            counter = (int.from_bytes(metadata, "big",
-                                      signed=False) & 0xFFFF0) >> 4
-            flags = int.from_bytes(metadata, "big", signed=False) & 9
-            mask = (int.from_bytes(info, "big", signed=False) & 0xFFFF0000) >> 16
-            value = int.from_bytes(info, "big", signed=False) & 0xFFFF
-            _code = CounterIfGreaterThan16(value, mask, flags, counter)
-            add_children_till_terminator(_code, f)
-            return _code
-        elif codetype == GeckoCommand.Type.COUNTER_IF_LT_16:
-            info = f.read(4)
-            counter = (int.from_bytes(metadata, "big",
-                                      signed=False) & 0xFFFF0) >> 4
-            flags = int.from_bytes(metadata, "big", signed=False) & 9
-            mask = (int.from_bytes(info, "big", signed=False) & 0xFFFF0000) >> 16
-            value = int.from_bytes(info, "big", signed=False) & 0xFFFF
-            _code = CounterIfLesserThan16(value, mask, flags, counter)
-            add_children_till_terminator(_code, f)
-            return _code
-        elif codetype == GeckoCommand.Type.ASM_EXECUTE:
-            info = f.read(4)
-            size = int.from_bytes(info, "big", signed=False)
-            return AsmExecute(f.read(size << 3))
-        elif codetype == GeckoCommand.Type.ASM_INSERT:
-            info = f.read(4)
-            size = int.from_bytes(info, "big", signed=False)
-            return AsmInsert(f.read(size << 3), address, isPointerType, isLink=(address & 1) != 0)
-        elif codetype == GeckoCommand.Type.WRITE_BRANCH:
-            info = f.read(4)
-            dest = int.from_bytes(info, "big", signed=False)
-            return WriteBranch(dest, address, isPointerType, isLink=(address & 1) != 0)
-        elif codetype == GeckoCommand.Type.SWITCH:
-            return Switch()
-        elif codetype == GeckoCommand.Type.ADDR_RANGE_CHECK:
-            info = f.read(4)
-            value = int.from_bytes(info, "big", signed=False)
-            endif = int.from_bytes(metadata, "big", signed=False) & 0x1
-            return AddressRangeCheck(value, isPointerType, endif)
-        elif codetype == GeckoCommand.Type.TERMINATOR:
-            info = f.read(4)
-            value = int.from_bytes(info, "big", signed=False)
-            return Terminator(value)
-        elif codetype == GeckoCommand.Type.ENDIF:
-            info = f.read(4)
-            value = int.from_bytes(info, "big", signed=False)
-            inverse = (int.from_bytes(metadata, "big",
-                                      signed=False) & 0x00F00000) >> 24
-            numEndifs = int.from_bytes(metadata, "big", signed=False) & 0xFF
-            return Endif(value, inverse, numEndifs)
-        elif codetype == GeckoCommand.Type.EXIT:
-            f.seek(4, 1)
-            return Exit()
-        elif codetype == GeckoCommand.Type.ASM_INSERT_XOR:
-            info = f.read(4)
-            size = int.from_bytes(info, "big", signed=False) & 0x000000FF
-            xor = int.from_bytes(info, "big", signed=False) & 0x00FFFF00
-            num = int.from_bytes(info, "big", signed=False) & 0xFF000000
-            pointer = codetype.value == 0xF4
-            return AsmInsertXOR(f.read(size << 3), address, pointer, xor, num, isLink=(address & 1) != 0)
-        elif codetype == GeckoCommand.Type.BRAINSLUG_SEARCH:
-            info = f.read(4)
-            value = int.from_bytes(info, "big", signed=False)
-            size = int.from_bytes(metadata, "big", signed=False) & 0x000000FF
-            _code = BrainslugSearch(f.read(size << 3), address, [
-                                    (value & 0xFFFF0000) >> 16, value & 0xFFFF])
-            add_children_till_terminator(_code, f)
-            return _code
 
     @staticmethod
     def str_to_geckocommand(f: Union[StringIO, str]) -> "GeckoCommand":
@@ -597,12 +610,12 @@ class GeckoCommand(object):
             info = bytes.fromhex(line[-8:])
             value = int.from_bytes(info[3:], "big", signed=False)
             repeat = int.from_bytes(info[:2], "big", signed=False)
-            return Write8(value, repeat, address, isPointerType)
+            return Write8(value, address, repeat, isPointerType)
         elif codetype == GeckoCommand.Type.WRITE_16:
             info = bytes.fromhex(line[-8:])
             value = int.from_bytes(info[2:], "big", signed=False)
             repeat = int.from_bytes(info[:2], "big", signed=False)
-            return Write16(value, repeat, address, isPointerType)
+            return Write16(value, address, repeat, isPointerType)
         elif codetype == GeckoCommand.Type.WRITE_32:
             info = bytes.fromhex(line[-8:])
             value = int.from_bytes(info, "big", signed=False)
@@ -624,7 +637,7 @@ class GeckoCommand(object):
             repeat = int.from_bytes(info[4:5], "big", signed=False) & 0xF
             addressInc = int.from_bytes(info[6:8], "big", signed=False)
             valueInc = int.from_bytes(info[8:], "big", signed=False)
-            return WriteSerial(value, repeat, address, isPointerType, valueSize, addressInc, valueInc)
+            return WriteSerial(value, address, repeat, isPointerType, valueSize, addressInc, valueInc)
         elif codetype == GeckoCommand.Type.IF_EQ_32:
             info = bytes.fromhex(line[-8:])
             value = int.from_bytes(info, "big", signed=False)
@@ -1038,10 +1051,8 @@ class GeckoCommand(object):
         """Return number of endifs this GeckoCommand applies"""
         return 0
 
-    def populate_from_bytes(self, f: BinaryIO):
-        """Populate this GeckoCommand with child commands using raw bytes,
-           
-           Return the command which ended this block, or None"""
+    def populate_from_bytes(self, f: Union[BytesIO, bytes]):
+        """Populate this GeckoCommand with child commands using raw bytes"""
         pass
 
     def apply(self, dol: DolFile) -> bool:
@@ -1469,15 +1480,16 @@ class IfEqual32(GeckoCommand):
         self._endif = endif
         self._isPointer = isPointer
         self._children = []
+        self._endifCode = None
 
     def __len__(self) -> int:
         return 8 + sum([len(c) for c in self])
 
     def __str__(self) -> str:
-        if len(self.children) > 0:
+        if len(list(self.children)) > 0:
             GeckoCommand._IndentionStart += GeckoCommand._IndentionWidth
             childrenPrint = "\n" + "\n".join([" "*GeckoCommand._IndentionStart + str(child)
-                                              for child in self._children])
+                                              for child in self.children])
             GeckoCommand._IndentionStart -= GeckoCommand._IndentionWidth
         else:
             childrenPrint = ""
@@ -1489,7 +1501,7 @@ class IfEqual32(GeckoCommand):
         return f"({intType:02X}) {endif}If the word at address (0x{self._address:08X} + the {addrstr}) is equal to 0x{self.value:08X}:{childrenPrint}"
 
     def __getitem__(self, index: int) -> GeckoCommand:
-        return self._children[index]
+        return list(self.children)[index]
 
     def __setitem__(self, index: int, value: GeckoCommand):
         if not isinstance(value, GeckoCommand):
@@ -1500,7 +1512,10 @@ class IfEqual32(GeckoCommand):
 
     @property
     def children(self) -> List["GeckoCommand"]:
-        return self._children
+        for child in self._children:
+            yield child
+        if self._endifCode:
+            yield self._endifCode
 
     @classproperty
     def codetype(cls) -> GeckoCommand.Type:
@@ -1526,7 +1541,7 @@ class IfEqual32(GeckoCommand):
         self._children.remove(child)
 
     def virtual_length(self) -> int:
-        return len(self.children) + 1
+        return len(list(self.children)) + 1
 
     def is_ba_type(self) -> bool:
         return not self._isPointer
@@ -1537,13 +1552,17 @@ class IfEqual32(GeckoCommand):
     def get_endifs(self) -> int:
         return 1 if self._endif else 0
 
-    def populate_from_bytes(self, f: BytesIO) -> "GeckoCommand":
+    def populate_from_bytes(self, f: Union[BytesIO, bytes]):
+        if isinstance(f, bytes):
+            f = BytesIO(f)
+            
         while f.tell() < len(f.getvalue()):
-            code = GeckoCommand.bytes_to_geckocommand(f)
-            if code.get_endifs() <= 0:
-                self.add_child(code)
+            code = GeckoCommand.bytes_to_geckocommand(f, self._EndifDepth + 1)
+            if self._EndifDepth - code.get_endifs() < 0:
+                self._endifCode = code
+                return
             else:
-                return code
+                self.add_child(code)
 
     def as_bytes(self) -> bytes:
         intType = GeckoCommand.type_to_int(self.codetype) | (
@@ -1565,15 +1584,16 @@ class IfNotEqual32(GeckoCommand):
         self._endif = endif
         self._isPointer = isPointer
         self._children = []
+        self._endifCode = None
 
     def __len__(self) -> int:
         return 8 + sum([len(c) for c in self])
 
     def __str__(self) -> str:
-        if len(self.children) > 0:
+        if len(list(self.children)) > 0:
             GeckoCommand._IndentionStart += GeckoCommand._IndentionWidth
             childrenPrint = "\n" + "\n".join([" "*GeckoCommand._IndentionStart + str(child)
-                                              for child in self._children])
+                                              for child in self.children])
             GeckoCommand._IndentionStart -= GeckoCommand._IndentionWidth
         else:
             childrenPrint = ""
@@ -1585,7 +1605,7 @@ class IfNotEqual32(GeckoCommand):
         return f"({intType:02X}) {endif}If the word at address (0x{self._address:08X} + the {addrstr}) is not equal to 0x{self.value:08X}:{childrenPrint}"
 
     def __getitem__(self, index: int) -> GeckoCommand:
-        return self._children[index]
+        return list(self.children)[index]
 
     def __setitem__(self, index: int, value: GeckoCommand):
         if not isinstance(value, GeckoCommand):
@@ -1596,7 +1616,10 @@ class IfNotEqual32(GeckoCommand):
 
     @property
     def children(self) -> List["GeckoCommand"]:
-        return self._children
+        for child in self._children:
+            yield child
+        if self._endifCode:
+            yield self._endifCode
 
     @classproperty
     def codetype(cls) -> GeckoCommand.Type:
@@ -1622,7 +1645,7 @@ class IfNotEqual32(GeckoCommand):
         self._children.remove(child)
 
     def virtual_length(self) -> int:
-        return len(self.children) + 1
+        return len(list(self.children)) + 1
 
     def is_ba_type(self) -> bool:
         return not self._isPointer
@@ -1633,13 +1656,17 @@ class IfNotEqual32(GeckoCommand):
     def get_endifs(self) -> int:
         return 1 if self._endif else 0
 
-    def populate_from_bytes(self, f: BytesIO) -> "GeckoCommand":
+    def populate_from_bytes(self, f: Union[BytesIO, bytes]):
+        if isinstance(f, bytes):
+            f = BytesIO(f)
+            
         while f.tell() < len(f.getvalue()):
-            code = GeckoCommand.bytes_to_geckocommand(f)
-            if code.get_endifs() <= 0:
-                self.add_child(code)
+            code = GeckoCommand.bytes_to_geckocommand(f, self._EndifDepth + 1)
+            if self._EndifDepth - code.get_endifs() < 0:
+                self._endifCode = code
+                return
             else:
-                return code
+                self.add_child(code)
 
     def as_bytes(self) -> bytes:
         intType = GeckoCommand.type_to_int(self.codetype) | (
@@ -1661,15 +1688,16 @@ class IfGreaterThan32(GeckoCommand):
         self._endif = endif
         self._isPointer = isPointer
         self._children = []
+        self._endifCode = None
 
     def __len__(self) -> int:
         return 8 + sum([len(c) for c in self])
 
     def __str__(self) -> str:
-        if len(self.children) > 0:
+        if len(list(self.children)) > 0:
             GeckoCommand._IndentionStart += GeckoCommand._IndentionWidth
             childrenPrint = "\n" + "\n".join([" "*GeckoCommand._IndentionStart + str(child)
-                                              for child in self._children])
+                                              for child in self.children])
             GeckoCommand._IndentionStart -= GeckoCommand._IndentionWidth
         else:
             childrenPrint = ""
@@ -1681,7 +1709,7 @@ class IfGreaterThan32(GeckoCommand):
         return f"({intType:02X}) {endif}If the word at address (0x{self._address:08X} + the {addrstr}) is greater than 0x{self.value:08X}:{childrenPrint}"
 
     def __getitem__(self, index: int) -> GeckoCommand:
-        return self._children[index]
+        return list(self.children)[index]
 
     def __setitem__(self, index: int, value: GeckoCommand):
         if not isinstance(value, GeckoCommand):
@@ -1692,7 +1720,10 @@ class IfGreaterThan32(GeckoCommand):
 
     @property
     def children(self) -> List["GeckoCommand"]:
-        return self._children
+        for child in self._children:
+            yield child
+        if self._endifCode:
+            yield self._endifCode
 
     @classproperty
     def codetype(cls) -> GeckoCommand.Type:
@@ -1718,7 +1749,7 @@ class IfGreaterThan32(GeckoCommand):
         self._children.remove(child)
 
     def virtual_length(self) -> int:
-        return len(self.children) + 1
+        return len(list(self.children)) + 1
 
     def is_ba_type(self) -> bool:
         return not self._isPointer
@@ -1729,13 +1760,17 @@ class IfGreaterThan32(GeckoCommand):
     def get_endifs(self) -> int:
         return 1 if self._endif else 0
 
-    def populate_from_bytes(self, f: BytesIO) -> "GeckoCommand":
+    def populate_from_bytes(self, f: Union[BytesIO, bytes]):
+        if isinstance(f, bytes):
+            f = BytesIO(f)
+            
         while f.tell() < len(f.getvalue()):
-            code = GeckoCommand.bytes_to_geckocommand(f)
-            if code.get_endifs() <= 0:
-                self.add_child(code)
+            code = GeckoCommand.bytes_to_geckocommand(f, self._EndifDepth + 1)
+            if self._EndifDepth - code.get_endifs() < 0:
+                self._endifCode = code
+                return
             else:
-                return code
+                self.add_child(code)
 
     def as_bytes(self) -> bytes:
         intType = GeckoCommand.type_to_int(self.codetype) | (
@@ -1757,15 +1792,16 @@ class IfLesserThan32(GeckoCommand):
         self._endif = endif
         self._isPointer = isPointer
         self._children = []
+        self._endifCode = None
 
     def __len__(self) -> int:
         return 8 + sum([len(c) for c in self])
 
     def __str__(self) -> str:
-        if len(self.children) > 0:
+        if len(list(self.children)) > 0:
             GeckoCommand._IndentionStart += GeckoCommand._IndentionWidth
             childrenPrint = "\n" + "\n".join([" "*GeckoCommand._IndentionStart + str(child)
-                                              for child in self._children])
+                                              for child in self.children])
             GeckoCommand._IndentionStart -= GeckoCommand._IndentionWidth
         else:
             childrenPrint = ""
@@ -1773,10 +1809,10 @@ class IfLesserThan32(GeckoCommand):
             0x10 if self._isPointer else 0)
         addrstr = "pointer address" if self._isPointer else "base address"
         endif = "(Apply Endif) " if self._endif else ""
-        return f"({intType:02X}) {endif}If the word at address (0x{self._address:08X} + the {addrstr}) is lesser than 0x{self.value:08X}:"
+        return f"({intType:02X}) {endif}If the word at address (0x{self._address:08X} + the {addrstr}) is lesser than 0x{self.value:08X}:{childrenPrint}"
 
     def __getitem__(self, index: int) -> GeckoCommand:
-        return self._children[index]
+        return list(self.children)[index]
 
     def __setitem__(self, index: int, value: GeckoCommand):
         if not isinstance(value, GeckoCommand):
@@ -1787,7 +1823,10 @@ class IfLesserThan32(GeckoCommand):
 
     @property
     def children(self) -> List["GeckoCommand"]:
-        return self._children
+        for child in self._children:
+            yield child
+        if self._endifCode:
+            yield self._endifCode
 
     @classproperty
     def codetype(cls) -> GeckoCommand.Type:
@@ -1813,7 +1852,7 @@ class IfLesserThan32(GeckoCommand):
         self._children.remove(child)
 
     def virtual_length(self) -> int:
-        return len(self.children) + 1
+        return len(list(self.children)) + 1
 
     def is_ba_type(self) -> bool:
         return not self._isPointer
@@ -1824,13 +1863,17 @@ class IfLesserThan32(GeckoCommand):
     def get_endifs(self) -> int:
         return 1 if self._endif else 0
 
-    def populate_from_bytes(self, f: BytesIO) -> "GeckoCommand":
+    def populate_from_bytes(self, f: Union[BytesIO, bytes]):
+        if isinstance(f, bytes):
+            f = BytesIO(f)
+            
         while f.tell() < len(f.getvalue()):
-            code = GeckoCommand.bytes_to_geckocommand(f)
-            if code.get_endifs() <= 0:
-                self.add_child(code)
+            code = GeckoCommand.bytes_to_geckocommand(f, self._EndifDepth + 1)
+            if self._EndifDepth - code.get_endifs() < 0:
+                self._endifCode = code
+                return
             else:
-                return code
+                self.add_child(code)
 
     def as_bytes(self) -> bytes:
         intType = GeckoCommand.type_to_int(self.codetype) | (
@@ -1853,15 +1896,16 @@ class IfEqual16(GeckoCommand):
         self._mask = mask
         self._isPointer = isPointer
         self._children = []
+        self._endifCode = None
 
     def __len__(self) -> int:
         return 8 + sum([len(c) for c in self])
 
     def __str__(self) -> str:
-        if len(self.children) > 0:
+        if len(list(self.children)) > 0:
             GeckoCommand._IndentionStart += GeckoCommand._IndentionWidth
             childrenPrint = "\n" + "\n".join([" "*GeckoCommand._IndentionStart + str(child)
-                                              for child in self._children])
+                                              for child in self.children])
             GeckoCommand._IndentionStart -= GeckoCommand._IndentionWidth
         else:
             childrenPrint = ""
@@ -1873,7 +1917,7 @@ class IfEqual16(GeckoCommand):
         return f"({intType:02X}) {endif}If the short at address (0x{self._address:08X} + the {addrstr}) & ~0x{self._mask:04X} is equal to 0x{self.value:08X}:{childrenPrint}"
 
     def __getitem__(self, index: int) -> GeckoCommand:
-        return self._children[index]
+        return list(self.children)[index]
 
     def __setitem__(self, index: int, value: GeckoCommand):
         if not isinstance(value, GeckoCommand):
@@ -1884,7 +1928,10 @@ class IfEqual16(GeckoCommand):
 
     @property
     def children(self) -> List["GeckoCommand"]:
-        return self._children
+        for child in self._children:
+            yield child
+        if self._endifCode:
+            yield self._endifCode
 
     @classproperty
     def codetype(cls) -> GeckoCommand.Type:
@@ -1910,7 +1957,7 @@ class IfEqual16(GeckoCommand):
         self._children.remove(child)
 
     def virtual_length(self) -> int:
-        return len(self.children) + 1
+        return len(list(self.children)) + 1
 
     def is_ba_type(self) -> bool:
         return not self._isPointer
@@ -1921,13 +1968,17 @@ class IfEqual16(GeckoCommand):
     def get_endifs(self) -> int:
         return 1 if self._endif else 0
 
-    def populate_from_bytes(self, f: BytesIO) -> "GeckoCommand":
+    def populate_from_bytes(self, f: Union[BytesIO, bytes]):
+        if isinstance(f, bytes):
+            f = BytesIO(f)
+            
         while f.tell() < len(f.getvalue()):
-            code = GeckoCommand.bytes_to_geckocommand(f)
-            if code.get_endifs() <= 0:
-                self.add_child(code)
+            code = GeckoCommand.bytes_to_geckocommand(f, self._EndifDepth + 1)
+            if self._EndifDepth - code.get_endifs() < 0:
+                self._endifCode = code
+                return
             else:
-                return code
+                self.add_child(code)
 
     def as_bytes(self) -> bytes:
         intType = GeckoCommand.type_to_int(self.codetype) | (
@@ -1950,15 +2001,16 @@ class IfNotEqual16(GeckoCommand):
         self._mask = mask
         self._isPointer = isPointer
         self._children = []
+        self._endifCode = None
 
     def __len__(self) -> int:
         return 8 + sum([len(c) for c in self])
 
     def __str__(self) -> str:
-        if len(self.children) > 0:
+        if len(list(self.children)) > 0:
             GeckoCommand._IndentionStart += GeckoCommand._IndentionWidth
             childrenPrint = "\n" + "\n".join([" "*GeckoCommand._IndentionStart + str(child)
-                                              for child in self._children])
+                                              for child in self.children])
             GeckoCommand._IndentionStart -= GeckoCommand._IndentionWidth
         else:
             childrenPrint = ""
@@ -1970,7 +2022,7 @@ class IfNotEqual16(GeckoCommand):
         return f"({intType:02X}) {endif}If the short at address (0x{self._address:08X} + the {addrstr}) & ~0x{self._mask:04X} is not equal to 0x{self.value:08X}:{childrenPrint}"
 
     def __getitem__(self, index: int) -> GeckoCommand:
-        return self._children[index]
+        return list(self.children)[index]
 
     def __setitem__(self, index: int, value: GeckoCommand):
         if not isinstance(value, GeckoCommand):
@@ -1981,7 +2033,10 @@ class IfNotEqual16(GeckoCommand):
 
     @property
     def children(self) -> List["GeckoCommand"]:
-        return self._children
+        for child in self._children:
+            yield child
+        if self._endifCode:
+            yield self._endifCode
 
     @classproperty
     def codetype(cls) -> GeckoCommand.Type:
@@ -2007,7 +2062,7 @@ class IfNotEqual16(GeckoCommand):
         self._children.remove(child)
 
     def virtual_length(self) -> int:
-        return len(self.children) + 1
+        return len(list(self.children)) + 1
 
     def is_ba_type(self) -> bool:
         return not self._isPointer
@@ -2018,13 +2073,17 @@ class IfNotEqual16(GeckoCommand):
     def get_endifs(self) -> int:
         return 1 if self._endif else 0
 
-    def populate_from_bytes(self, f: BytesIO) -> "GeckoCommand":
+    def populate_from_bytes(self, f: Union[BytesIO, bytes]):
+        if isinstance(f, bytes):
+            f = BytesIO(f)
+            
         while f.tell() < len(f.getvalue()):
-            code = GeckoCommand.bytes_to_geckocommand(f)
-            if code.get_endifs() <= 0:
-                self.add_child(code)
+            code = GeckoCommand.bytes_to_geckocommand(f, self._EndifDepth + 1)
+            if self._EndifDepth - code.get_endifs() < 0:
+                self._endifCode = code
+                return
             else:
-                return code
+                self.add_child(code)
 
     def as_bytes(self) -> bytes:
         intType = GeckoCommand.type_to_int(self.codetype) | (
@@ -2047,15 +2106,16 @@ class IfGreaterThan16(GeckoCommand):
         self._mask = mask
         self._isPointer = isPointer
         self._children = []
+        self._endifCode = None
 
     def __len__(self) -> int:
         return 8 + sum([len(c) for c in self])
 
     def __str__(self) -> str:
-        if len(self.children) > 0:
+        if len(list(self.children)) > 0:
             GeckoCommand._IndentionStart += GeckoCommand._IndentionWidth
             childrenPrint = "\n" + "\n".join([" "*GeckoCommand._IndentionStart + str(child)
-                                              for child in self._children])
+                                              for child in self.children])
             GeckoCommand._IndentionStart -= GeckoCommand._IndentionWidth
         else:
             childrenPrint = ""
@@ -2067,7 +2127,7 @@ class IfGreaterThan16(GeckoCommand):
         return f"({intType:02X}) {endif}If the short at address (0x{self._address:08X} + the {addrstr}) & ~0x{self._mask:04X} is greater than 0x{self.value:08X}:{childrenPrint}"
 
     def __getitem__(self, index: int) -> GeckoCommand:
-        return self._children[index]
+        return list(self.children)[index]
 
     def __setitem__(self, index: int, value: GeckoCommand):
         if not isinstance(value, GeckoCommand):
@@ -2078,7 +2138,10 @@ class IfGreaterThan16(GeckoCommand):
 
     @property
     def children(self) -> List["GeckoCommand"]:
-        return self._children
+        for child in self._children:
+            yield child
+        if self._endifCode:
+            yield self._endifCode
 
     @classproperty
     def codetype(cls) -> GeckoCommand.Type:
@@ -2104,7 +2167,7 @@ class IfGreaterThan16(GeckoCommand):
         self._children.remove(child)
 
     def virtual_length(self) -> int:
-        return len(self.children) + 1
+        return len(list(self.children)) + 1
 
     def is_ba_type(self) -> bool:
         return not self._isPointer
@@ -2115,13 +2178,17 @@ class IfGreaterThan16(GeckoCommand):
     def get_endifs(self) -> int:
         return 1 if self._endif else 0
 
-    def populate_from_bytes(self, f: BytesIO) -> "GeckoCommand":
+    def populate_from_bytes(self, f: Union[BytesIO, bytes]):
+        if isinstance(f, bytes):
+            f = BytesIO(f)
+            
         while f.tell() < len(f.getvalue()):
-            code = GeckoCommand.bytes_to_geckocommand(f)
-            if code.get_endifs() <= 0:
-                self.add_child(code)
+            code = GeckoCommand.bytes_to_geckocommand(f, self._EndifDepth + 1)
+            if self._EndifDepth - code.get_endifs() < 0:
+                self._endifCode = code
+                return
             else:
-                return code
+                self.add_child(code)
 
     def as_bytes(self) -> bytes:
         intType = GeckoCommand.type_to_int(self.codetype) | (
@@ -2144,15 +2211,16 @@ class IfLesserThan16(GeckoCommand):
         self._mask = mask
         self._isPointer = isPointer
         self._children = []
+        self._endifCode = None
 
     def __len__(self) -> int:
         return 8 + sum([len(c) for c in self])
 
     def __str__(self) -> str:
-        if len(self.children) > 0:
+        if len(list(self.children)) > 0:
             GeckoCommand._IndentionStart += GeckoCommand._IndentionWidth
             childrenPrint = "\n" + "\n".join([" "*GeckoCommand._IndentionStart + str(child)
-                                              for child in self._children])
+                                              for child in self.children])
             GeckoCommand._IndentionStart -= GeckoCommand._IndentionWidth
         else:
             childrenPrint = ""
@@ -2164,7 +2232,7 @@ class IfLesserThan16(GeckoCommand):
         return f"({intType:02X}) {endif}If the short at address (0x{self._address:08X} + the {addrstr}) & ~0x{self._mask:04X} is lesser than 0x{self.value:08X}:{childrenPrint}"
 
     def __getitem__(self, index: int) -> GeckoCommand:
-        return self._children[index]
+        return list(self.children)[index]
 
     def __setitem__(self, index: int, value: GeckoCommand):
         if not isinstance(value, GeckoCommand):
@@ -2175,7 +2243,10 @@ class IfLesserThan16(GeckoCommand):
 
     @property
     def children(self) -> List["GeckoCommand"]:
-        return self._children
+        for child in self._children:
+            yield child
+        if self._endifCode:
+            yield self._endifCode
 
     @classproperty
     def codetype(cls) -> GeckoCommand.Type:
@@ -2201,7 +2272,7 @@ class IfLesserThan16(GeckoCommand):
         self._children.remove(child)
 
     def virtual_length(self) -> int:
-        return len(self.children) + 1
+        return len(list(self.children)) + 1
 
     def is_ba_type(self) -> bool:
         return not self._isPointer
@@ -2212,13 +2283,17 @@ class IfLesserThan16(GeckoCommand):
     def get_endifs(self) -> int:
         return 1 if self._endif else 0
 
-    def populate_from_bytes(self, f: BytesIO) -> "GeckoCommand":
+    def populate_from_bytes(self, f: Union[BytesIO, bytes]):
+        if isinstance(f, bytes):
+            f = BytesIO(f)
+            
         while f.tell() < len(f.getvalue()):
-            code = GeckoCommand.bytes_to_geckocommand(f)
-            if code.get_endifs() <= 0:
-                self.add_child(code)
+            code = GeckoCommand.bytes_to_geckocommand(f, self._EndifDepth + 1)
+            if self._EndifDepth - code.get_endifs() < 0:
+                self._endifCode = code
+                return
             else:
-                return code
+                self.add_child(code)
 
     def as_bytes(self) -> bytes:
         intType = GeckoCommand.type_to_int(self.codetype) | (
@@ -3510,15 +3585,16 @@ class GeckoIfEqual16(GeckoCommand):
         self._other = otherRegister
         self._isPointer = isPointer
         self._children = []
+        self._endifCode = None
 
     def __len__(self) -> int:
         return 8 + sum([len(c) for c in self])
 
     def __str__(self) -> str:
-        if len(self.children) > 0:
+        if len(list(self.children)) > 0:
             GeckoCommand._IndentionStart += GeckoCommand._IndentionWidth
             childrenPrint = "\n" + "\n".join([" "*GeckoCommand._IndentionStart + str(child)
-                                              for child in self._children])
+                                              for child in self.children])
             GeckoCommand._IndentionStart -= GeckoCommand._IndentionWidth
         else:
             childrenPrint = ""
@@ -3532,7 +3608,7 @@ class GeckoIfEqual16(GeckoCommand):
         return f"({intType:02X}) {endif}If {home} is equal to {target}:{childrenPrint}"
 
     def __getitem__(self, index: int) -> GeckoCommand:
-        return self._children[index]
+        return list(self.children)[index]
 
     def __setitem__(self, index: int, value: GeckoCommand):
         if not isinstance(value, GeckoCommand):
@@ -3543,7 +3619,10 @@ class GeckoIfEqual16(GeckoCommand):
 
     @property
     def children(self) -> List["GeckoCommand"]:
-        return self._children
+        for child in self._children:
+            yield child
+        if self._endifCode:
+            yield self._endifCode
 
     @classproperty
     def codetype(cls) -> GeckoCommand.Type:
@@ -3559,7 +3638,7 @@ class GeckoIfEqual16(GeckoCommand):
         self._children.remove(child)
 
     def virtual_length(self) -> int:
-        return len(self.children) + 1
+        return len(list(self.children)) + 1
 
     def is_ba_type(self) -> bool:
         return not self._isPointer
@@ -3570,13 +3649,17 @@ class GeckoIfEqual16(GeckoCommand):
     def get_endifs(self) -> int:
         return 1 if self._endif else 0
 
-    def populate_from_bytes(self, f: BytesIO) -> "GeckoCommand":
+    def populate_from_bytes(self, f: Union[BytesIO, bytes]):
+        if isinstance(f, bytes):
+            f = BytesIO(f)
+            
         while f.tell() < len(f.getvalue()):
-            code = GeckoCommand.bytes_to_geckocommand(f)
-            if code.get_endifs() <= 0:
-                self.add_child(code)
+            code = GeckoCommand.bytes_to_geckocommand(f, self._EndifDepth + 1)
+            if self._EndifDepth - code.get_endifs() < 0:
+                self._endifCode = code
+                return
             else:
-                return code
+                self.add_child(code)
 
     def as_bytes(self) -> bytes:
         intType = GeckoCommand.type_to_int(self.codetype) | (
@@ -3603,15 +3686,16 @@ class GeckoIfNotEqual16(GeckoCommand):
         self._other = otherRegister
         self._isPointer = isPointer
         self._children = []
+        self._endifCode = None
 
     def __len__(self) -> int:
         return 8 + sum([len(c) for c in self])
 
     def __str__(self) -> str:
-        if len(self.children) > 0:
+        if len(list(self.children)) > 0:
             GeckoCommand._IndentionStart += GeckoCommand._IndentionWidth
             childrenPrint = "\n" + "\n".join([" "*GeckoCommand._IndentionStart + str(child)
-                                              for child in self._children])
+                                              for child in self.children])
             GeckoCommand._IndentionStart -= GeckoCommand._IndentionWidth
         else:
             childrenPrint = ""
@@ -3625,7 +3709,7 @@ class GeckoIfNotEqual16(GeckoCommand):
         return f"({intType:02X}) {endif}If {home} is not equal to {target}:{childrenPrint}"
 
     def __getitem__(self, index: int) -> GeckoCommand:
-        return self._children[index]
+        return list(self.children)[index]
 
     def __setitem__(self, index: int, value: GeckoCommand):
         if not isinstance(value, GeckoCommand):
@@ -3636,7 +3720,10 @@ class GeckoIfNotEqual16(GeckoCommand):
 
     @property
     def children(self) -> List["GeckoCommand"]:
-        return self._children
+        for child in self._children:
+            yield child
+        if self._endifCode:
+            yield self._endifCode
 
     @classproperty
     def codetype(cls) -> GeckoCommand.Type:
@@ -3652,7 +3739,7 @@ class GeckoIfNotEqual16(GeckoCommand):
         self._children.remove(child)
 
     def virtual_length(self) -> int:
-        return len(self.children) + 1
+        return len(list(self.children)) + 1
 
     def is_ba_type(self) -> bool:
         return not self._isPointer
@@ -3663,13 +3750,17 @@ class GeckoIfNotEqual16(GeckoCommand):
     def get_endifs(self) -> int:
         return 1 if self._endif else 0
 
-    def populate_from_bytes(self, f: BytesIO) -> "GeckoCommand":
+    def populate_from_bytes(self, f: Union[BytesIO, bytes]):
+        if isinstance(f, bytes):
+            f = BytesIO(f)
+            
         while f.tell() < len(f.getvalue()):
-            code = GeckoCommand.bytes_to_geckocommand(f)
-            if code.get_endifs() <= 0:
-                self.add_child(code)
+            code = GeckoCommand.bytes_to_geckocommand(f, self._EndifDepth + 1)
+            if self._EndifDepth - code.get_endifs() < 0:
+                self._endifCode = code
+                return
             else:
-                return code
+                self.add_child(code)
 
     def as_bytes(self) -> bytes:
         intType = GeckoCommand.type_to_int(self.codetype) | (
@@ -3696,15 +3787,16 @@ class GeckoIfGreaterThan16(GeckoCommand):
         self._other = otherRegister
         self._isPointer = isPointer
         self._children = []
+        self._endifCode = None
 
     def __len__(self) -> int:
         return 8 + sum([len(c) for c in self])
 
     def __str__(self) -> str:
-        if len(self.children) > 0:
+        if len(list(self.children)) > 0:
             GeckoCommand._IndentionStart += GeckoCommand._IndentionWidth
             childrenPrint = "\n" + "\n".join([" "*GeckoCommand._IndentionStart + str(child)
-                                              for child in self._children])
+                                              for child in self.children])
             GeckoCommand._IndentionStart -= GeckoCommand._IndentionWidth
         else:
             childrenPrint = ""
@@ -3718,7 +3810,7 @@ class GeckoIfGreaterThan16(GeckoCommand):
         return f"({intType:02X}) {endif}If {home} is greater than {target}:{childrenPrint}"
 
     def __getitem__(self, index: int) -> GeckoCommand:
-        return self._children[index]
+        return list(self.children)[index]
 
     def __setitem__(self, index: int, value: GeckoCommand):
         if not isinstance(value, GeckoCommand):
@@ -3729,7 +3821,10 @@ class GeckoIfGreaterThan16(GeckoCommand):
 
     @property
     def children(self) -> List["GeckoCommand"]:
-        return self._children
+        for child in self._children:
+            yield child
+        if self._endifCode:
+            yield self._endifCode
 
     @classproperty
     def codetype(cls) -> GeckoCommand.Type:
@@ -3745,7 +3840,7 @@ class GeckoIfGreaterThan16(GeckoCommand):
         self._children.remove(child)
 
     def virtual_length(self) -> int:
-        return len(self.children) + 1
+        return len(list(self.children)) + 1
 
     def is_ba_type(self) -> bool:
         return not self._isPointer
@@ -3756,13 +3851,17 @@ class GeckoIfGreaterThan16(GeckoCommand):
     def get_endifs(self) -> int:
         return 1 if self._endif else 0
 
-    def populate_from_bytes(self, f: BytesIO) -> "GeckoCommand":
+    def populate_from_bytes(self, f: Union[BytesIO, bytes]):
+        if isinstance(f, bytes):
+            f = BytesIO(f)
+            
         while f.tell() < len(f.getvalue()):
-            code = GeckoCommand.bytes_to_geckocommand(f)
-            if code.get_endifs() <= 0:
-                self.add_child(code)
+            code = GeckoCommand.bytes_to_geckocommand(f, self._EndifDepth + 1)
+            if self._EndifDepth - code.get_endifs() < 0:
+                self._endifCode = code
+                return
             else:
-                return code
+                self.add_child(code)
 
     def as_bytes(self) -> bytes:
         intType = GeckoCommand.type_to_int(self.codetype) | (
@@ -3789,15 +3888,16 @@ class GeckoIfLesserThan16(GeckoCommand):
         self._other = otherRegister
         self._isPointer = isPointer
         self._children = []
+        self._endifCode = None
 
     def __len__(self) -> int:
         return 8 + sum([len(c) for c in self])
 
     def __str__(self) -> str:
-        if len(self.children) > 0:
+        if len(list(self.children)) > 0:
             GeckoCommand._IndentionStart += GeckoCommand._IndentionWidth
             childrenPrint = "\n" + "\n".join([" "*GeckoCommand._IndentionStart + str(child)
-                                              for child in self._children])
+                                              for child in self.children])
             GeckoCommand._IndentionStart -= GeckoCommand._IndentionWidth
         else:
             childrenPrint = ""
@@ -3811,7 +3911,7 @@ class GeckoIfLesserThan16(GeckoCommand):
         return f"({intType:02X}) {endif}If {home} is less than {target}:{childrenPrint}"
 
     def __getitem__(self, index: int) -> GeckoCommand:
-        return self._children[index]
+        return list(self.children)[index]
 
     def __setitem__(self, index: int, value: GeckoCommand):
         if not isinstance(value, GeckoCommand):
@@ -3822,7 +3922,10 @@ class GeckoIfLesserThan16(GeckoCommand):
 
     @property
     def children(self) -> List["GeckoCommand"]:
-        return self._children
+        for child in self._children:
+            yield child
+        if self._endifCode:
+            yield self._endifCode
 
     @classproperty
     def codetype(cls) -> GeckoCommand.Type:
@@ -3838,7 +3941,7 @@ class GeckoIfLesserThan16(GeckoCommand):
         self._children.remove(child)
 
     def virtual_length(self) -> int:
-        return len(self.children) + 1
+        return len(list(self.children)) + 1
 
     def is_ba_type(self) -> bool:
         return not self._isPointer
@@ -3849,13 +3952,17 @@ class GeckoIfLesserThan16(GeckoCommand):
     def get_endifs(self) -> int:
         return 1 if self._endif else 0
 
-    def populate_from_bytes(self, f: BytesIO) -> "GeckoCommand":
+    def populate_from_bytes(self, f: Union[BytesIO, bytes]):
+        if isinstance(f, bytes):
+            f = BytesIO(f)
+            
         while f.tell() < len(f.getvalue()):
-            code = GeckoCommand.bytes_to_geckocommand(f)
-            if code.get_endifs() <= 0:
-                self.add_child(code)
+            code = GeckoCommand.bytes_to_geckocommand(f, self._EndifDepth + 1)
+            if self._EndifDepth - code.get_endifs() < 0:
+                self._endifCode = code
+                return
             else:
-                return code
+                self.add_child(code)
 
     def as_bytes(self) -> bytes:
         intType = GeckoCommand.type_to_int(self.codetype) | (
@@ -3877,15 +3984,16 @@ class CounterIfEqual16(GeckoCommand):
         self._flags = flags
         self._counter = counter
         self._children = []
+        self._endifCode = None
 
     def __len__(self) -> int:
         return 8 + sum([len(c) for c in self])
 
     def __str__(self) -> str:
-        if len(self.children) > 0:
+        if len(list(self.children)) > 0:
             GeckoCommand._IndentionStart += GeckoCommand._IndentionWidth
             childrenPrint = "\n" + "\n".join([" "*GeckoCommand._IndentionStart + str(child)
-                                              for child in self._children])
+                                              for child in self.children])
             GeckoCommand._IndentionStart -= GeckoCommand._IndentionWidth
         else:
             childrenPrint = ""
@@ -3897,7 +4005,7 @@ class CounterIfEqual16(GeckoCommand):
         return f"({intType:02X}) {endif}{ty}If (0x{self.value:08X} & ~0x{self._mask:04X}) is equal to {self._counter}:{childrenPrint}"
 
     def __getitem__(self, index: int) -> GeckoCommand:
-        return self._children[index]
+        return list(self.children)[index]
 
     def __setitem__(self, index: int, value: GeckoCommand):
         if not isinstance(value, GeckoCommand):
@@ -3908,7 +4016,10 @@ class CounterIfEqual16(GeckoCommand):
 
     @property
     def children(self) -> List["GeckoCommand"]:
-        return self._children
+        for child in self._children:
+            yield child
+        if self._endifCode:
+            yield self._endifCode
 
     @classproperty
     def codetype(cls) -> GeckoCommand.Type:
@@ -3934,18 +4045,22 @@ class CounterIfEqual16(GeckoCommand):
         self._children.remove(child)
 
     def virtual_length(self) -> int:
-        return len(self.children) + 1
+        return len(list(self.children)) + 1
 
     def get_endifs(self) -> int:
         return 1 if (self._flags & 0x1) != 0 else 0
 
-    def populate_from_bytes(self, f: BytesIO) -> "GeckoCommand":
+    def populate_from_bytes(self, f: Union[BytesIO, bytes]):
+        if isinstance(f, bytes):
+            f = BytesIO(f)
+            
         while f.tell() < len(f.getvalue()):
-            code = GeckoCommand.bytes_to_geckocommand(f)
-            if code.get_endifs() <= 0:
-                self.add_child(code)
+            code = GeckoCommand.bytes_to_geckocommand(f, self._EndifDepth + 1)
+            if self._EndifDepth - code.get_endifs() < 0:
+                self._endifCode = code
+                return
             else:
-                return code
+                self.add_child(code)
 
     def as_bytes(self) -> bytes:
         intType = GeckoCommand.type_to_int(self.codetype)
@@ -3965,15 +4080,16 @@ class CounterIfNotEqual16(GeckoCommand):
         self._flags = flags
         self._counter = counter
         self._children = []
+        self._endifCode = None
 
     def __len__(self) -> int:
         return 8 + sum([len(c) for c in self])
 
     def __str__(self) -> str:
-        if len(self.children) > 0:
+        if len(list(self.children)) > 0:
             GeckoCommand._IndentionStart += GeckoCommand._IndentionWidth
             childrenPrint = "\n" + "\n".join([" "*GeckoCommand._IndentionStart + str(child)
-                                              for child in self._children])
+                                              for child in self.children])
             GeckoCommand._IndentionStart -= GeckoCommand._IndentionWidth
         else:
             childrenPrint = ""
@@ -3985,7 +4101,7 @@ class CounterIfNotEqual16(GeckoCommand):
         return f"({intType:02X}) {endif}{ty}If (0x{self.value:08X} & ~0x{self._mask:04X}) is not equal to {self._counter}:{childrenPrint}"
 
     def __getitem__(self, index: int) -> GeckoCommand:
-        return self._children[index]
+        return list(self.children)[index]
 
     def __setitem__(self, index: int, value: GeckoCommand):
         if not isinstance(value, GeckoCommand):
@@ -3996,7 +4112,10 @@ class CounterIfNotEqual16(GeckoCommand):
 
     @property
     def children(self) -> List["GeckoCommand"]:
-        return self._children
+        for child in self._children:
+            yield child
+        if self._endifCode:
+            yield self._endifCode
 
     @classproperty
     def codetype(cls) -> GeckoCommand.Type:
@@ -4022,18 +4141,22 @@ class CounterIfNotEqual16(GeckoCommand):
         self._children.remove(child)
 
     def virtual_length(self) -> int:
-        return len(self.children) + 1
+        return len(list(self.children)) + 1
 
     def get_endifs(self) -> int:
         return 1 if (self._flags & 0x1) != 0 else 0
 
-    def populate_from_bytes(self, f: BytesIO) -> "GeckoCommand":
+    def populate_from_bytes(self, f: Union[BytesIO, bytes]):
+        if isinstance(f, bytes):
+            f = BytesIO(f)
+            
         while f.tell() < len(f.getvalue()):
-            code = GeckoCommand.bytes_to_geckocommand(f)
-            if code.get_endifs() <= 0:
-                self.add_child(code)
+            code = GeckoCommand.bytes_to_geckocommand(f, self._EndifDepth + 1)
+            if self._EndifDepth - code.get_endifs() < 0:
+                self._endifCode = code
+                return
             else:
-                return code
+                self.add_child(code)
 
     def as_bytes(self) -> bytes:
         intType = GeckoCommand.type_to_int(self.codetype)
@@ -4053,15 +4176,16 @@ class CounterIfGreaterThan16(GeckoCommand):
         self._flags = flags
         self._counter = counter
         self._children = []
+        self._endifCode = None
 
     def __len__(self) -> int:
         return 8 + sum([len(c) for c in self])
 
     def __str__(self) -> str:
-        if len(self.children) > 0:
+        if len(list(self.children)) > 0:
             GeckoCommand._IndentionStart += GeckoCommand._IndentionWidth
             childrenPrint = "\n" + "\n".join([" "*GeckoCommand._IndentionStart + str(child)
-                                              for child in self._children])
+                                              for child in self.children])
             GeckoCommand._IndentionStart -= GeckoCommand._IndentionWidth
         else:
             childrenPrint = ""
@@ -4073,7 +4197,7 @@ class CounterIfGreaterThan16(GeckoCommand):
         return f"({intType:02X}) {endif}{ty}If (0x{self.value:08X} & ~0x{self._mask:04X}) is greater than {self._counter}:{childrenPrint}"
 
     def __getitem__(self, index: int) -> GeckoCommand:
-        return self._children[index]
+        return list(self.children)[index]
 
     def __setitem__(self, index: int, value: GeckoCommand):
         if not isinstance(value, GeckoCommand):
@@ -4084,7 +4208,10 @@ class CounterIfGreaterThan16(GeckoCommand):
 
     @property
     def children(self) -> List["GeckoCommand"]:
-        return self._children
+        for child in self._children:
+            yield child
+        if self._endifCode:
+            yield self._endifCode
 
     @classproperty
     def codetype(cls) -> GeckoCommand.Type:
@@ -4110,18 +4237,22 @@ class CounterIfGreaterThan16(GeckoCommand):
         self._children.remove(child)
 
     def virtual_length(self) -> int:
-        return len(self.children) + 1
+        return len(list(self.children)) + 1
 
     def get_endifs(self) -> int:
         return 1 if (self._flags & 0x1) != 0 else 0
 
-    def populate_from_bytes(self, f: BytesIO) -> "GeckoCommand":
+    def populate_from_bytes(self, f: Union[BytesIO, bytes]):
+        if isinstance(f, bytes):
+            f = BytesIO(f)
+            
         while f.tell() < len(f.getvalue()):
-            code = GeckoCommand.bytes_to_geckocommand(f)
-            if code.get_endifs() <= 0:
-                self.add_child(code)
+            code = GeckoCommand.bytes_to_geckocommand(f, self._EndifDepth + 1)
+            if self._EndifDepth - code.get_endifs() < 0:
+                self._endifCode = code
+                return
             else:
-                return code
+                self.add_child(code)
 
     def as_bytes(self) -> bytes:
         intType = GeckoCommand.type_to_int(self.codetype)
@@ -4141,15 +4272,16 @@ class CounterIfLesserThan16(GeckoCommand):
         self._flags = flags
         self._counter = counter
         self._children = []
+        self._endifCode = None
 
     def __len__(self) -> int:
         return 8 + sum([len(c) for c in self])
 
     def __str__(self) -> str:
-        if len(self.children) > 0:
+        if len(list(self.children)) > 0:
             GeckoCommand._IndentionStart += GeckoCommand._IndentionWidth
             childrenPrint = "\n" + "\n".join([" "*GeckoCommand._IndentionStart + str(child)
-                                              for child in self._children])
+                                              for child in self.children])
             GeckoCommand._IndentionStart -= GeckoCommand._IndentionWidth
         else:
             childrenPrint = ""
@@ -4161,7 +4293,7 @@ class CounterIfLesserThan16(GeckoCommand):
         return f"({intType:02X}) {endif}{ty}If (0x{self.value:08X} & ~0x{self._mask:04X}) is less than {self._counter}:{childrenPrint}"
 
     def __getitem__(self, index: int) -> GeckoCommand:
-        return self._children[index]
+        return list(self.children)[index]
 
     def __setitem__(self, index: int, value: GeckoCommand):
         if not isinstance(value, GeckoCommand):
@@ -4172,7 +4304,10 @@ class CounterIfLesserThan16(GeckoCommand):
 
     @property
     def children(self) -> List["GeckoCommand"]:
-        return self._children
+        for child in self._children:
+            yield child
+        if self._endifCode:
+            yield self._endifCode
 
     @classproperty
     def codetype(cls) -> GeckoCommand.Type:
@@ -4198,18 +4333,22 @@ class CounterIfLesserThan16(GeckoCommand):
         self._children.remove(child)
 
     def virtual_length(self) -> int:
-        return len(self.children) + 1
+        return len(list(self.children)) + 1
 
     def get_endifs(self) -> int:
         return 1 if (self._flags & 0x1) != 0 else 0
 
-    def populate_from_bytes(self, f: BytesIO) -> "GeckoCommand":
+    def populate_from_bytes(self, f: Union[BytesIO, bytes]):
+        if isinstance(f, bytes):
+            f = BytesIO(f)
+            
         while f.tell() < len(f.getvalue()):
-            code = GeckoCommand.bytes_to_geckocommand(f)
-            if code.get_endifs() <= 0:
-                self.add_child(code)
+            code = GeckoCommand.bytes_to_geckocommand(f, self._EndifDepth + 1)
+            if self._EndifDepth - code.get_endifs() < 0:
+                self._endifCode = code
+                return
             else:
-                return code
+                self.add_child(code)
 
     def as_bytes(self) -> bytes:
         intType = GeckoCommand.type_to_int(self.codetype)
@@ -4695,15 +4834,16 @@ class BrainslugSearch(GeckoCommand):
         self._address = address & 0x1FFFFFF
         self._searchRange = searchRange
         self._children = []
+        self._endifCode = None
 
     def __len__(self) -> int:
         return 8 + len(self.value) + sum([len(c) for c in self])
 
     def __str__(self) -> str:
-        if len(self.children) > 0:
+        if len(list(self.children)) > 0:
             GeckoCommand._IndentionStart += GeckoCommand._IndentionWidth
             childrenPrint = "\n" + "\n".join([" "*GeckoCommand._IndentionStart + str(child)
-                                              for child in self._children])
+                                              for child in self.children])
             GeckoCommand._IndentionStart -= GeckoCommand._IndentionWidth
         else:
             childrenPrint = ""
@@ -4712,7 +4852,7 @@ class BrainslugSearch(GeckoCommand):
         return f"({intType:02X}) If the linear data search finds a match between addresses 0x{(self._searchRange[0] & 0xFFFF) << 16:08X} and 0x{(self._searchRange[1] & 0xFFFF) << 16:08X}, set the pointer address to the beginning of the match and run:{childrenPrint}"
 
     def __getitem__(self, index: int) -> GeckoCommand:
-        return self._children[index]
+        return list(self.children)[index]
 
     def __setitem__(self, index: int, value: GeckoCommand):
         if not isinstance(value, GeckoCommand):
@@ -4723,7 +4863,10 @@ class BrainslugSearch(GeckoCommand):
 
     @property
     def children(self) -> List["GeckoCommand"]:
-        return self._children
+        for child in self._children:
+            yield child
+        if self._endifCode:
+            yield self._endifCode
 
     @classproperty
     def codetype(cls) -> GeckoCommand.Type:
@@ -4747,15 +4890,28 @@ class BrainslugSearch(GeckoCommand):
         self._children.remove(child)
 
     def virtual_length(self) -> int:
-        return len(self.children) + 1
+        return len(list(self.children)) + 1
 
-    def populate_from_bytes(self, f: BytesIO) -> "GeckoCommand":
+    def populate_from_bytes(self, f: Union[BytesIO, bytes]):
+        if isinstance(f, bytes):
+            f = BytesIO(f)
+            
         while f.tell() < len(f.getvalue()):
-            code = GeckoCommand.bytes_to_geckocommand(f)
-            if code.get_endifs() <= 0:
-                self.add_child(code)
+            code = GeckoCommand.bytes_to_geckocommand(f, self._EndifDepth + 1)
+            if self._EndifDepth - code.get_endifs() < 0:
+                self._endifCode = code
+                return
             else:
-                return code
+                self.add_child(code)
+
+    def populate_from_str(self, f: StringIO):
+        while f.tell() < len(f.getvalue()):
+            code = GeckoCommand.bytes_to_geckocommand(f, self._EndifDepth + 1)
+            if self._EndifDepth - code.get_endifs() < 0:
+                self._endifCode = code
+                return
+            else:
+                self.add_child(code)
 
     def as_bytes(self) -> bytes:
         intType = GeckoCommand.type_to_int(self.codetype)
@@ -4876,7 +5032,7 @@ class GeckoCode(object):
 
     @classmethod
     def from_bytes(cls, f: Union[BinaryIO, bytes], name: Optional[str] = None, author: Optional[str] = None, desc: Optional[str] = None, enabled: bool = True) -> "GeckoCode":
-        if not isinstance(f, BytesIO):
+        if isinstance(f, bytes):
             f = BytesIO(f)
 
         code = cls(f"GeckoCode {GeckoCode._TmpNameCounter}" if name is None else name,
@@ -4886,7 +5042,7 @@ class GeckoCode(object):
         GeckoCode._TmpNameCounter += 1
 
         while f.tell() < len(f.getvalue()):
-            command = GeckoCommand.bytes_to_geckocommand(f)
+            command = GeckoCommand.bytes_to_geckocommand(f, 0)
             if command.codetype == GeckoCommand.Type.EXIT:
                 break
             code.add_child(command)
