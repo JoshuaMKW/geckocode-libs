@@ -597,12 +597,12 @@ class GeckoCommand(object):
             info = bytes.fromhex(line[-8:])
             value = int.from_bytes(info[3:], "big", signed=False)
             repeat = int.from_bytes(info[:2], "big", signed=False)
-            return Write8(value, repeat, address, isPointerType)
+            return Write8(value, address, repeat, isPointerType)
         elif codetype == GeckoCommand.Type.WRITE_16:
             info = bytes.fromhex(line[-8:])
             value = int.from_bytes(info[2:], "big", signed=False)
             repeat = int.from_bytes(info[:2], "big", signed=False)
-            return Write16(value, repeat, address, isPointerType)
+            return Write16(value, address, repeat, isPointerType)
         elif codetype == GeckoCommand.Type.WRITE_32:
             info = bytes.fromhex(line[-8:])
             value = int.from_bytes(info, "big", signed=False)
@@ -624,7 +624,7 @@ class GeckoCommand(object):
             repeat = int.from_bytes(info[4:5], "big", signed=False) & 0xF
             addressInc = int.from_bytes(info[6:8], "big", signed=False)
             valueInc = int.from_bytes(info[8:], "big", signed=False)
-            return WriteSerial(value, repeat, address, isPointerType, valueSize, addressInc, valueInc)
+            return WriteSerial(value, address, repeat, isPointerType, valueSize, addressInc, valueInc)
         elif codetype == GeckoCommand.Type.IF_EQ_32:
             info = bytes.fromhex(line[-8:])
             value = int.from_bytes(info, "big", signed=False)
@@ -4946,6 +4946,9 @@ class GeckoCode(object):
         """Apply this GeckoCode directly to a DOL if supported as provided by a `DolFile`
 
            Return True if the command is successfully applied"""
+        if not self.is_enabled():
+            return False
+
         status = False
         for command in self._commands:
             status |= command.apply(dol)
