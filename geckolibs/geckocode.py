@@ -250,7 +250,7 @@ class GeckoCommand(object):
             info = f.read(12)
             value = int.from_bytes(info[:4], "big", signed=False)
             valueSize = int.from_bytes(info[4:5], "big", signed=False) >> 4
-            repeat = int.from_bytes(info[4:5], "big", signed=False) & 0xF
+            repeat = int.from_bytes(info[4:6], "big", signed=False) & 0xFFF
             addressInc = int.from_bytes(info[6:8], "big", signed=False)
             valueInc = int.from_bytes(info[8:], "big", signed=False)
             return WriteSerial(value, address, repeat, isPointerType, valueSize, addressInc, valueInc)
@@ -619,11 +619,11 @@ class GeckoCommand(object):
             return WriteString(data, address, isPointerType)
         elif codetype == GeckoCommand.Type.WRITE_SERIAL:
             info = bytes.fromhex("".join(f.readline().strip().split()))
-            value = int.from_bytes(info[:4], "big", signed=False)
-            valueSize = int.from_bytes(info[4:5], "big", signed=False) >> 4
-            repeat = int.from_bytes(info[4:5], "big", signed=False) & 0xF
-            addressInc = int.from_bytes(info[6:8], "big", signed=False)
-            valueInc = int.from_bytes(info[8:], "big", signed=False)
+            value = int.from_bytes(line[-8:], "big", signed=False)
+            valueSize = int.from_bytes(info[:1], "big", signed=False) >> 4
+            repeat = int.from_bytes(info[:2], "big", signed=False) & 0xFFF
+            addressInc = int.from_bytes(info[2:4], "big", signed=False)
+            valueInc = int.from_bytes(info[4:8], "big", signed=False)
             return WriteSerial(value, address, repeat, isPointerType, valueSize, addressInc, valueInc)
         elif codetype == GeckoCommand.Type.IF_EQ_32:
             info = bytes.fromhex(line[-8:])
