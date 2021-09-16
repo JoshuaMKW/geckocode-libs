@@ -72,8 +72,11 @@ class GeckoCodeTable(object):
         except IndexError:
             raise StopIteration
 
-    def __getitem__(self, key: str) -> GeckoCode:
-        return self._codes[key]
+    def __getitem__(self, key: Union[str, int]) -> GeckoCode:
+        if isinstance(key, str):
+            return self._codes[key]
+        else:
+            return list(self._codes.values())[key]
 
     def __setitem__(self, key: str, value: GeckoCode):
         if not isinstance(value, GeckoCode):
