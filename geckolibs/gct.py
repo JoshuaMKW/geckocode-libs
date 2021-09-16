@@ -44,7 +44,8 @@ class GeckoCodeTable(object):
     gameID: str
     gameName: str
 
-    MAGIC = b"\x00\xD0\xC0\xDE\x00\xD0\xC0\xDE"
+    Magic = b"\x00\xD0\xC0\xDE\x00\xD0\xC0\xDE"
+    VolatileToken = "[[volatile]]"
 
     def __init__(self, gameID: str = "GECK01", gameName: str = "geckocode-libs"):
         self.gameID = gameID
@@ -126,7 +127,7 @@ class GeckoCodeTable(object):
             f = BytesIO(f)
 
         magic = f.read(8)
-        assert magic == GeckoCodeTable.MAGIC, f"GeckoCodeTable magic not found (0x{magic.hex()} != 0x{GeckoCodeTable.MAGIC.hex()})"
+        assert magic == GeckoCodeTable.Magic, f"GeckoCodeTable magic not found (0x{magic.hex()} != 0x{GeckoCodeTable.Magic.hex()})"
 
         gct = cls()
         gct.add_child(GeckoCode.from_bytes(f))
@@ -168,13 +169,17 @@ class GeckoCodeTable(object):
         while f.tell() < len(f.getvalue()):
             line = f.readline()
             sLine = line.strip()
+            isPreApplicable = True
+            if sLine.lower().endswith(GeckoCodeTable.VolatileToken):
+                isPreApplicable = False
+                sLine = sLine[:-len(GeckoCodeTable.VolatileToken)].strip()
             if mode == GeckoTextType.DOLPHIN:
                 if line == "":
                     continue
                 elif line.startswith("$"):
                     if len(data) > 0:
                         code = GeckoCode.from_text(
-                            "\n".join(data).strip(), name.strip(), author, "\n".join(desc), enabled=(name in enabledCodes or not _foundEnabled))
+                            "\n".join(data).strip(), name.strip(), author, "\n".join(desc), enabled=(name in enabledCodes or not _foundEnabled), preapplicable=isPreApplicable)
                         gct.add_child(code)
                         data.clear()
                         desc.clear()
@@ -225,7 +230,7 @@ class GeckoCodeTable(object):
                         desc.append(sLine)
                     else:
                         gct.add_child(GeckoCode.from_text(
-                            "\n".join(data), name, author, "\n".join(desc), _enabled))
+                            "\n".join(data), name, author, "\n".join(desc), _enabled), preapplicable=isPreApplicable)
                         name = ""
                         author = ""
                         desc.clear()
@@ -304,7 +309,7 @@ class GeckoCodeTable(object):
         packet = b""
         for code in self:
             packet += code.as_bytes()
-        return GeckoCodeTable.MAGIC + packet + b"\xF0\x00\x00\x00\x00\x00\x00\x00"
+        return GeckoCodeTable.Magic + packet + b"\xF0\x00\x00\x00\x00\x00\x00\x00"
 
     def as_text(self) -> str:
         """Return the textual representation of this GCT"""
@@ -322,11 +327,14 @@ class GeckoCodeTable(object):
             for code in self:
                 author = ""
                 desc = "*\n"
+                token = ""
                 if code.author:
                     author = f" [{code.author}]"
                 if code.desc:
                     desc = "*" + "\n*".join(code.desc.split("\n")) + "\n"
-                codelist += f"${code.name}{author}\n{code.as_text()}\n{desc}"
+                if not code.is_preapplicable():
+                    token = " " + GeckoCodeTable.VolatileToken
+                codelist += f"${code.name}{author}{token}\n{code.as_text()}\n{desc}"
                 if code.is_enabled():
                     enableds += f"${code.name}\n"
             return f"{codelist}{enableds.rstrip()}"
@@ -335,12 +343,15 @@ class GeckoCodeTable(object):
             for code in self:
                 author = ""
                 desc = ""
+                token = ""
                 if code.author:
                     author = f" [{code.author}]"
                 if code.desc:
                     desc = code.desc + "\n"
+                if not code.is_preapplicable():
+                    token = " " + GeckoCodeTable.VolatileToken
                 data = '\n* '.join(code.as_text().split('\n'))
-                codelist += f"{code.name}{author}\n* {data}\n{desc}\n"
+                codelist += f"{code.name}{author}{token}\n* {data}\n{desc}\n"
             return codelist.rstrip()
         else:
             codelist = ""

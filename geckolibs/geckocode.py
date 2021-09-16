@@ -179,7 +179,6 @@ class GeckoCommand(object):
             GeckoCommand.Type.WRITE_SERIAL,
             GeckoCommand.Type.ASM_EXECUTE,
             GeckoCommand.Type.ASM_INSERT,
-            GeckoCommand.Type.ASM_INSERT_L,
             GeckoCommand.Type.ASM_INSERT_XOR,
             GeckoCommand.Type.BRAINSLUG_SEARCH
         }
@@ -619,7 +618,7 @@ class GeckoCommand(object):
             return WriteString(data, address, isPointerType)
         elif codetype == GeckoCommand.Type.WRITE_SERIAL:
             info = bytes.fromhex("".join(f.readline().strip().split()))
-            value = int.from_bytes(line[-8:], "big", signed=False)
+            value = int(line[-8:], 16)
             valueSize = int.from_bytes(info[:1], "big", signed=False) >> 4
             repeat = int.from_bytes(info[:2], "big", signed=False) & 0xFFF
             addressInc = int.from_bytes(info[2:4], "big", signed=False)
@@ -1146,7 +1145,7 @@ class Write8(GeckoCommand):
 
     def apply(self, dol: DolFile) -> bool:
         addr = self._address | 0x80000000
-        if dol.is_mapped(addr):
+        if dol.is_mapped(addr) and self.is_ba_type():
             dol.seek(addr)
             counter = self._repeat
             while counter + 1 > 0:
@@ -1223,7 +1222,7 @@ class Write16(GeckoCommand):
 
     def apply(self, dol: DolFile) -> bool:
         addr = self._address | 0x80000000
-        if dol.is_mapped(addr):
+        if dol.is_mapped(addr) and self.is_ba_type():
             dol.seek(addr)
             counter = self._repeat
             while counter + 1 > 0:
@@ -1296,7 +1295,7 @@ class Write32(GeckoCommand):
 
     def apply(self, dol: DolFile) -> bool:
         addr = self._address | 0x80000000
-        if dol.is_mapped(addr):
+        if dol.is_mapped(addr) and self.is_ba_type():
             dol.seek(addr)
             dol.write(self.value.to_bytes(4, "big", signed=False))
             return True
@@ -1359,7 +1358,7 @@ class WriteString(GeckoCommand):
 
     def apply(self, dol: DolFile) -> bool:
         addr = self._address | 0x80000000
-        if dol.is_mapped(addr):
+        if dol.is_mapped(addr) and self.is_ba_type():
             dol.seek(addr)
             dol.write(self.value)
             return True
@@ -1399,7 +1398,7 @@ class WriteSerial(GeckoCommand):
             return f"({intType:02X}) Write {valueType} 0x{self.value:08X} to 0x{self._address:08X} + the {addrstr})"
 
     def __getitem__(self, index: int) -> Tuple[int, int]:
-        if index >= self._repeat:
+        if index > self._repeat:
             raise IndexError(
                 f"Index [{index}] is beyond the virtual code size")
         elif index < 0:
@@ -1443,10 +1442,10 @@ class WriteSerial(GeckoCommand):
 
     def apply(self, dol: DolFile) -> bool:
         addr = self._address | 0x80000000
-        if dol.is_mapped(addr):
+        if dol.is_mapped(addr) and self.is_ba_type():
             for addr, value in self:
-                dol.seek(addr)
-                dol.write(value)
+                dol.seek(addr | 0x80000000)
+                dol.write(value.to_bytes(4, "big", signed=False))
             return True
         return False
 
@@ -4379,7 +4378,7 @@ class WriteBranch(GeckoCommand):
 
     def apply(self, dol: DolFile) -> bool:
         addr = self._address | 0x80000000
-        if dol.is_mapped(addr):
+        if dol.is_mapped(addr) and self.is_ba_type():
             dol.seek(addr)
             dol.insert_branch(self.value, addr, lk=addr & 1)
             return True
@@ -4781,7 +4780,9 @@ class GeckoCode(object):
     `add_child`:             Add a `GeckoCommand` to this GeckoCode.
     `remove_child`:          Remove a `GeckoCommand` from this GeckoCode.
     `set_enabled`:           Set if this `GeckoCode` is enabled or not.
+    `set_preapplicable`:     Set if this `GeckoCode` should be pre-applicable to a `DolFile`.
     `is_enabled`:            Return if this `GeckoCode` is enabled or not.
+    `is_preapplicable`:      Return if this `GeckoCode is pre-applicable or not.
     `is_equal_body`:         Return if the commands in this GeckoCode are the same as the other.
     `virtual_length`:        Returns the length of this GeckoCode in Gecko \"lines\".
     `apply`:                 Apply this GeckoCode to the `DolFile` given to this method.
@@ -4796,11 +4797,12 @@ class GeckoCode(object):
 
     _TmpNameCounter = 0
 
-    def __init__(self, name: str, author: str, desc: str, commands: Union[List[GeckoCommand], GeckoCommand] = None, enabled: bool = True):
+    def __init__(self, name: str, author: str, desc: str, commands: Union[List[GeckoCommand], GeckoCommand] = None, enabled: bool = True, preapplicable: bool = True):
         self.name = name
         self.author = author
         self.desc = desc
         self._enabled = enabled
+        self._preapplicable = preapplicable
         if commands is None:
             commands = list()
         if isinstance(commands, GeckoCommand):
@@ -4875,14 +4877,15 @@ class GeckoCode(object):
             return other + self.as_bytes()
 
     @classmethod
-    def from_bytes(cls, f: Union[BinaryIO, bytes], name: Optional[str] = None, author: Optional[str] = None, desc: Optional[str] = None, enabled: bool = True) -> "GeckoCode":
+    def from_bytes(cls, f: Union[BinaryIO, bytes], name: Optional[str] = None, author: Optional[str] = None, desc: Optional[str] = None, enabled: bool = True, preapplicable: bool = True) -> "GeckoCode":
         if not isinstance(f, BytesIO):
             f = BytesIO(f)
 
         code = cls(f"GeckoCode {GeckoCode._TmpNameCounter}" if name is None else name,
                    author,
                    desc,
-                   enabled=enabled)
+                   enabled=enabled,
+                   preapplicable=preapplicable)
         GeckoCode._TmpNameCounter += 1
 
         while f.tell() < len(f.getvalue()):
@@ -4894,14 +4897,15 @@ class GeckoCode(object):
         return code
 
     @classmethod
-    def from_text(cls, f: Union[TextIO, str], name: Optional[str] = None, author: Optional[str] = None, desc: Optional[str] = None, enabled: bool = True) -> "GeckoCode":
+    def from_text(cls, f: Union[TextIO, str], name: Optional[str] = None, author: Optional[str] = None, desc: Optional[str] = None, enabled: bool = True, preapplicable: bool = True) -> "GeckoCode":
         if not isinstance(f, StringIO):
             f = StringIO(f)
 
         code = cls(f"GeckoCode {GeckoCode._TmpNameCounter}" if name is None else name,
                    author,
                    desc,
-                   enabled=enabled)
+                   enabled=enabled,
+                   preapplicable=preapplicable)
         GeckoCode._TmpNameCounter += 1
 
         while f.tell() < len(f.getvalue()):
@@ -4931,8 +4935,14 @@ class GeckoCode(object):
     def set_enabled(self, enabled: bool):
         self._enabled = enabled
 
+    def set_preapplicable(self, preapplicable: bool):
+        self._preapplicable = preapplicable
+
     def is_enabled(self) -> bool:
         return self._enabled
+
+    def is_preapplicable(self) -> bool:
+        return self._preapplicable
 
     def is_equal_body(self, other: "GeckoCode") -> bool:
         """Return if the commands in this GeckoCode are the same as the other"""
@@ -4946,7 +4956,7 @@ class GeckoCode(object):
         """Apply this GeckoCode directly to a DOL if supported as provided by a `DolFile`
 
            Return True if the command is successfully applied"""
-        if not self.is_enabled():
+        if not self.is_enabled() or not self.is_preapplicable():
             return False
 
         status = False
