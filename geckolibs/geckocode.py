@@ -4393,7 +4393,7 @@ class AsmInsertLink(GeckoCommand):
         intType = GeckoCommand.type_to_int(self.codetype) | (
             0x10 if self._isPointer else 0)
         addrstr = "pointer address" if self._isPointer else "base address"
-        btype = "(bl / NaN)" if self._isLink else "(b / b)"
+        btype = "(bl / NaN)"
         return f"({intType:02X}) Inject {btype} the designated ASM at 0x{self._address:08X} + the {addrstr}"
 
     def __getitem__(self, index: int) -> bytes:
@@ -4433,7 +4433,7 @@ class AsmInsertLink(GeckoCommand):
         intType = GeckoCommand.type_to_int(self.codetype) | (
             0x10 if self._isPointer else 0)
         metadata = (intType << 24) | (self._address &
-                                      0x1FFFFFC) | (1 if self._isLink else 0)
+                                      0x1FFFFFC)
         info = self.virtual_length() - 1
         return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False) + _align_bytes(self.value, alignment=8)
 
