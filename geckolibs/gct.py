@@ -6,7 +6,7 @@ from typing import BinaryIO, Dict, Iterable, TextIO, Union
 
 from dolreader.dol import DolFile
 
-from .geckocode import Exit, GeckoCode, GeckoCommand, InvalidGeckoCodeError
+from geckolibs.geckocode import Exit, GeckoCode, GeckoCommand, InvalidGeckoCodeError
 
 
 class GeckoTextType(Enum):
@@ -139,6 +139,21 @@ class GeckoCodeTable(object):
     @classmethod
     def from_text(cls, f: Union[TextIO, str]) -> "GeckoCodeTable":
         """Create a new `GeckoCodeTable` from a textual codelist"""
+
+        def is_probably_code(text: str) -> bool:
+            text = text.strip()
+            if len(text) != 17:
+                return False
+
+            if not text[8].isspace():
+                return False
+
+            try:
+                int(text[:8] + text[9:], 16)
+                return True
+            except ValueError:
+                return False
+
         if not isinstance(f, StringIO):
             if isinstance(f, str):
                 f = StringIO(f)
@@ -172,20 +187,29 @@ class GeckoCodeTable(object):
         while f.tell() < len(f.getvalue()):
             line = f.readline()
             sLine = line.strip()
-            isPreApplicable = True
-            if sLine.lower().endswith(GeckoCodeTable.VolatileToken):
-                isPreApplicable = False
-                sLine = sLine[:-len(GeckoCodeTable.VolatileToken)].strip()
             if mode == GeckoTextType.DOLPHIN:
                 if line == "":
                     continue
                 elif line.startswith("$"):
                     if len(data) > 0:
                         code = GeckoCode.from_text(
-                            "\n".join(data).strip(), name.strip(), author, "\n".join(desc), enabled=(name in enabledCodes or not _foundEnabled), preapplicable=isPreApplicable)
+                            "\n".join(data).strip(),
+                            name.strip(),
+                            author,
+                            "\n".join(desc),
+                            enabled=(
+                                name in enabledCodes or not _foundEnabled),
+                            preapplicable=isPreApplicable
+                        )
                         gct.add_child(code)
                         data.clear()
                         desc.clear()
+
+                    isPreApplicable = True
+                    if sLine.lower().endswith(GeckoCodeTable.VolatileToken):
+                        isPreApplicable = False
+                        sLine = sLine[:-len(GeckoCodeTable.VolatileToken)].strip()
+
                     n = sLine[::-1].find("[") + 1
                     if n == 0:
                         name = sLine[1:]
@@ -211,6 +235,11 @@ class GeckoCodeTable(object):
                     _gameInfoCollected = True
                     continue
 
+                isPreApplicable = True
+                if sLine.lower().endswith(GeckoCodeTable.VolatileToken):
+                    isPreApplicable = False
+                    sLine = sLine[:-len(GeckoCodeTable.VolatileToken)].strip()
+
                 n = sLine[::-1].find("[") + 1
                 if n == 0:
                     name = sLine
@@ -224,22 +253,34 @@ class GeckoCodeTable(object):
                 _descReading = False
                 while f.tell() < len(f.getvalue()):
                     sLine = f.readline().strip()
+                    nsLine = sLine.lstrip("*").strip()
                     if _firstPass:
                         _enabled = sLine.startswith("*")
-                    elif len(sLine.lstrip("*").strip()) == 17 and not _descReading:
-                        data.append(f"{sLine[1:].strip()}")
+                    
+                    if is_probably_code(nsLine) and not _descReading:
+                        data.append(nsLine)
                     elif sLine != "":
                         _descReading = True
                         desc.append(sLine)
                     else:
-                        gct.add_child(GeckoCode.from_text(
-                            "\n".join(data), name, author, "\n".join(desc), _enabled), preapplicable=isPreApplicable)
-                        name = ""
-                        author = ""
-                        desc.clear()
-                        data.clear()
                         break
                     _firstPass = False
+
+                if len(data) > 0:
+                    gct.add_child(
+                        GeckoCode.from_text(
+                            "\n".join(data),
+                            name,
+                            author,
+                            "\n".join(desc),
+                            _enabled,
+                            preapplicable=isPreApplicable
+                        )
+                    )
+                    name = ""
+                    author = ""
+                    desc.clear()
+                    data.clear()
             else:
                 if sLine != "":
                     data.append(sLine)
@@ -353,8 +394,9 @@ class GeckoCodeTable(object):
                     desc = code.desc + "\n"
                 if not code.is_preapplicable():
                     token = " " + GeckoCodeTable.VolatileToken
-                data = '\n* '.join(code.as_text().split('\n'))
-                codelist += f"{code.name}{author}{token}\n* {data}\n{desc}\n"
+                prefix = "\n* " if code.is_enabled() else "\n"
+                data = prefix.join(code.as_text().split("\n"))
+                codelist += f"{code.name}{author}{token}{prefix}{data}\n{desc}\n"
             return codelist.rstrip()
         else:
             codelist = ""
@@ -369,6 +411,6 @@ class GeckoCodeTable(object):
         GeckoCommand._IndentionStart = startindent
         for code in self:
             for command in code:
-                print(command)
+                print(command, file=buffer)
         GeckoCommand._IndentionWidth = _prev
         print(str(Exit()), file=buffer)

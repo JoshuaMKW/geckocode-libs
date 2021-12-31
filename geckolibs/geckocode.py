@@ -1,11 +1,11 @@
-from enum import Enum
-from io import BytesIO, StringIO
-from typing import (Any, BinaryIO, Iterable, List, Optional, TextIO, Tuple,
+from enum import IntEnum
+from io import BufferedIOBase, BytesIO, StringIO
+from typing import (Any, BinaryIO, Callable, Iterable, List, Optional, TextIO, Tuple,
                     Union)
 
 from dolreader.dol import DolFile
 
-from . import __version__
+from geckolibs import __version__
 
 
 def _align_bytes(_bytes: bytes, alignment: int = 4, fill: bytes = b"\x00") -> bytes:
@@ -14,6 +14,14 @@ def _align_bytes(_bytes: bytes, alignment: int = 4, fill: bytes = b"\x00") -> by
     if diff == alignment:
         return _bytes
     return _bytes + (fill * diff)
+
+
+def _get_io_length(f: BufferedIOBase):
+    _oldPos = f.tell()
+    f.seek(0, 2)
+    length = f.tell()
+    f.seek(_oldPos)
+    return length
 
 
 class InvalidGeckoCommandError(Exception):
@@ -29,7 +37,7 @@ class classproperty(property):
         return classmethod(self.fget).__get__(None, owner)()
 
 
-class GeckoCommand(object):
+class GeckoCommand():
     """
     Representation of a single command following the Gecko format.
 
@@ -64,7 +72,10 @@ class GeckoCommand(object):
     _IndentionWidth = 4
     _IndentionStart = 0
 
-    class Type(Enum):
+    _BadCommandBytesCB: Callable[[BinaryIO], "GeckoCommand"] = lambda _: None
+    _BadCommandTextCB: Callable[[TextIO], "GeckoCommand"] = lambda _: None
+
+    class Type(IntEnum):
         WRITE_8 = 0x00
         WRITE_16 = 0x02
         WRITE_32 = 0x04
@@ -108,6 +119,7 @@ class GeckoCommand(object):
         COUNTER_IF_LT_16 = 0xAE
         ASM_EXECUTE = 0xC0
         ASM_INSERT = 0xC2
+        ASM_INSERT_LINK = 0xC4
         WRITE_BRANCH = 0xC6
         SWITCH = 0xCC
         ADDR_RANGE_CHECK = 0xCE
@@ -117,7 +129,7 @@ class GeckoCommand(object):
         ASM_INSERT_XOR = 0xF2
         BRAINSLUG_SEARCH = 0xF6
 
-    class ArithmeticType(Enum):
+    class ArithmeticType(IntEnum):
         ADD = 0
         MUL = 1
         OR = 2
@@ -132,6 +144,7 @@ class GeckoCommand(object):
 
     @staticmethod
     def int_to_type(id: int) -> Type:
+        """Returns the `Type` the integer `id` represents"""
         id &= 0xFE
         if id == 0xF4:
             return GeckoCommand.Type.ASM_INSERT_XOR
@@ -142,10 +155,12 @@ class GeckoCommand(object):
 
     @staticmethod
     def type_to_int(ty: Type) -> int:
+        """Returns the integer representation of the `Type` ty"""
         return ty.value
 
     @staticmethod
     def is_ifblock(_type: Union[Type, "GeckoCommand"]) -> bool:
+        """Returns if this command type is an if block type which can contain children"""
         if isinstance(_type, GeckoCommand):
             _type = _type.codetype
 
@@ -171,6 +186,7 @@ class GeckoCommand(object):
 
     @staticmethod
     def is_multiline(_type: Union[Type, "GeckoCommand"]) -> bool:
+        """Returns if this command type is multiline by nature"""
         if isinstance(_type, GeckoCommand):
             _type = _type.codetype
 
@@ -185,6 +201,7 @@ class GeckoCommand(object):
 
     @staticmethod
     def can_preprocess(_type: Union[Type, "GeckoCommand"]) -> bool:
+        """Returns if this command type can be preprocessed into a DOL directly"""
         if isinstance(_type, GeckoCommand):
             _type = _type.codetype
 
@@ -203,26 +220,55 @@ class GeckoCommand(object):
 
     @staticmethod
     def typeof(code: "GeckoCommand") -> Type:
+        """Return the type of a GeckoCommand"""
         return code.codetype
 
     @staticmethod
+    def set_parsing_error_bytes_cb(cb: Callable[[BinaryIO], "GeckoCommand"]):
+        """
+        Sets the internal error callback which is executed when text fails to be converted to a proper `GeckoCommand`
+
+        This is useful for custom error handling such as raise custom errors or potentially setting text in a GUI.
+        You could even potentially attempt to correct the error by reading the data yourself from the provided stream
+        and there after returning your own `GeckoCommand` from the callback
+        """
+        GeckoCommand._BadCommandBytesCB = cb
+
+    @staticmethod
+    def set_parsing_error_bytes_cb(cb: Callable[[TextIO], "GeckoCommand"]):
+        """
+        Sets the internal error callback which is executed when bytes fail to be converted to a proper `GeckoCommand`
+
+        This is useful for custom error handling such as raise custom errors or potentially setting text in a GUI.
+        You could even potentially attempt to correct the error by reading the data yourself from the provided stream
+        and there after returning your own `GeckoCommand` from the callback
+        """
+        GeckoCommand._BadCommandTextCB = cb
+
+    @staticmethod
     def bytes_to_geckocommand(f: Union[BinaryIO, bytes]) -> "GeckoCommand":
+        """Converts an array of bytes to a `GeckoCommand` and returns the result"""
+
         def add_children_till_terminator(code: "GeckoCommand", f: BytesIO):
-            while f.tell() < len(f.getvalue()):
+            while f.tell() < _get_io_length(f):
                 child = GeckoCommand.bytes_to_geckocommand(f)
                 if child.codetype in {GeckoCommand.Type.TERMINATOR, GeckoCommand.Type.EXIT}:
                     f.seek(-8, 1)
                     return
                 code.add_child(child)
 
-        if not isinstance(f, BytesIO):
+        if not isinstance(f, BufferedIOBase):
             f = BytesIO(f)
 
         metadata = f.read(4)
         address = int.from_bytes(
             metadata, byteorder="big", signed=False) & 0x1FFFFFF
-        codetype = GeckoCommand.int_to_type((int.from_bytes(
-            metadata, "big", signed=False) >> 24) & 0xFE)
+        try:
+            codetype = GeckoCommand.int_to_type((int.from_bytes(
+                metadata, "big", signed=False) >> 24) & 0xFE)
+        except ValueError:
+            f.seek(-4, 1)
+            return GeckoCommand._BadCommandBytesCB(f)
         isPointerType = ((int.from_bytes(
             metadata, "big", signed=False) >> 24) & 0x10 != 0)
 
@@ -571,8 +617,10 @@ class GeckoCommand(object):
 
     @staticmethod
     def str_to_geckocommand(f: Union[StringIO, str]) -> "GeckoCommand":
+        """Converts text to a `GeckoCommand` and returns the result"""
+
         def add_children_till_terminator(code: "GeckoCommand", f: StringIO):
-            while f.tell() < len(f.getvalue()):
+            while f.tell() < _get_io_length(f):
                 child = GeckoCommand.str_to_geckocommand(f)
                 if child.codetype in {GeckoCommand.Type.TERMINATOR, GeckoCommand.Type.EXIT}:
                     f.seek(f.tell() - 17)
@@ -582,13 +630,18 @@ class GeckoCommand(object):
         if not isinstance(f, StringIO):
             f = StringIO(f)
 
+        _oldpos = f.tell()
         line = f.readline().strip()
         metadata = bytes.fromhex(line[:8])
 
         address = int.from_bytes(
             metadata, byteorder="big", signed=False) & 0x1FFFFFF
-        codetype = GeckoCommand.int_to_type((int.from_bytes(
-            metadata, "big", signed=False) >> 24) & 0xFE)
+        try:
+            codetype = GeckoCommand.int_to_type((int.from_bytes(
+                metadata, "big", signed=False) >> 24) & 0xFE)
+        except ValueError:
+            f.seek(_oldpos, 0)
+            return GeckoCommand._BadCommandTextCB(f)
         isPointerType = ((int.from_bytes(
             metadata, "big", signed=False) >> 24) & 0x10 != 0)
 
@@ -1038,21 +1091,27 @@ class GeckoCommand(object):
         return 0
 
     def populate_from_bytes(self, f: BinaryIO):
-        """Populate this GeckoCommand with child commands using raw bytes,
-           
-           Return the command which ended this block, or None"""
+        """
+        Populate this GeckoCommand with child commands using raw bytes
+
+        Return the command which ended this block, or None
+        """
         pass
 
     def apply(self, dol: DolFile) -> bool:
-        """Apply this GeckoCommand directly to a DOL if supported as abstracted with the DolFile class
+        """
+        Apply this GeckoCommand directly to a DOL if supported as abstracted with the DolFile class
 
-           Return True if the GeckoCommand is successfully applied"""
+        Return True if the GeckoCommand is successfully applied
+        """
         return False
 
     def apply_f(self, dolpath: str) -> bool:
-        """Apply this GeckoCommand directly to a DOL if supported as provided by a file path
+        """
+        Apply this GeckoCommand directly to a DOL if supported as provided by a file path
 
-           Return True if the GeckoCommand is successfully applied"""
+        Return True if the GeckoCommand is successfully applied
+        """
         with open(str(dolpath), "rb") as f:
             dol = DolFile(f)
 
@@ -1537,7 +1596,7 @@ class IfEqual32(GeckoCommand):
         return 1 if self._endif else 0
 
     def populate_from_bytes(self, f: BytesIO) -> "GeckoCommand":
-        while f.tell() < len(f.getvalue()):
+        while f.tell() < _get_io_length(f):
             code = GeckoCommand.bytes_to_geckocommand(f)
             if code.get_endifs() <= 0:
                 self.add_child(code)
@@ -1633,7 +1692,7 @@ class IfNotEqual32(GeckoCommand):
         return 1 if self._endif else 0
 
     def populate_from_bytes(self, f: BytesIO) -> "GeckoCommand":
-        while f.tell() < len(f.getvalue()):
+        while f.tell() < _get_io_length(f):
             code = GeckoCommand.bytes_to_geckocommand(f)
             if code.get_endifs() <= 0:
                 self.add_child(code)
@@ -1729,7 +1788,7 @@ class IfGreaterThan32(GeckoCommand):
         return 1 if self._endif else 0
 
     def populate_from_bytes(self, f: BytesIO) -> "GeckoCommand":
-        while f.tell() < len(f.getvalue()):
+        while f.tell() < _get_io_length(f):
             code = GeckoCommand.bytes_to_geckocommand(f)
             if code.get_endifs() <= 0:
                 self.add_child(code)
@@ -1824,7 +1883,7 @@ class IfLesserThan32(GeckoCommand):
         return 1 if self._endif else 0
 
     def populate_from_bytes(self, f: BytesIO) -> "GeckoCommand":
-        while f.tell() < len(f.getvalue()):
+        while f.tell() < _get_io_length(f):
             code = GeckoCommand.bytes_to_geckocommand(f)
             if code.get_endifs() <= 0:
                 self.add_child(code)
@@ -1921,7 +1980,7 @@ class IfEqual16(GeckoCommand):
         return 1 if self._endif else 0
 
     def populate_from_bytes(self, f: BytesIO) -> "GeckoCommand":
-        while f.tell() < len(f.getvalue()):
+        while f.tell() < _get_io_length(f):
             code = GeckoCommand.bytes_to_geckocommand(f)
             if code.get_endifs() <= 0:
                 self.add_child(code)
@@ -2018,7 +2077,7 @@ class IfNotEqual16(GeckoCommand):
         return 1 if self._endif else 0
 
     def populate_from_bytes(self, f: BytesIO) -> "GeckoCommand":
-        while f.tell() < len(f.getvalue()):
+        while f.tell() < _get_io_length(f):
             code = GeckoCommand.bytes_to_geckocommand(f)
             if code.get_endifs() <= 0:
                 self.add_child(code)
@@ -2115,7 +2174,7 @@ class IfGreaterThan16(GeckoCommand):
         return 1 if self._endif else 0
 
     def populate_from_bytes(self, f: BytesIO) -> "GeckoCommand":
-        while f.tell() < len(f.getvalue()):
+        while f.tell() < _get_io_length(f):
             code = GeckoCommand.bytes_to_geckocommand(f)
             if code.get_endifs() <= 0:
                 self.add_child(code)
@@ -2212,7 +2271,7 @@ class IfLesserThan16(GeckoCommand):
         return 1 if self._endif else 0
 
     def populate_from_bytes(self, f: BytesIO) -> "GeckoCommand":
-        while f.tell() < len(f.getvalue()):
+        while f.tell() < _get_io_length(f):
             code = GeckoCommand.bytes_to_geckocommand(f)
             if code.get_endifs() <= 0:
                 self.add_child(code)
@@ -3570,7 +3629,7 @@ class GeckoIfEqual16(GeckoCommand):
         return 1 if self._endif else 0
 
     def populate_from_bytes(self, f: BytesIO) -> "GeckoCommand":
-        while f.tell() < len(f.getvalue()):
+        while f.tell() < _get_io_length(f):
             code = GeckoCommand.bytes_to_geckocommand(f)
             if code.get_endifs() <= 0:
                 self.add_child(code)
@@ -3663,7 +3722,7 @@ class GeckoIfNotEqual16(GeckoCommand):
         return 1 if self._endif else 0
 
     def populate_from_bytes(self, f: BytesIO) -> "GeckoCommand":
-        while f.tell() < len(f.getvalue()):
+        while f.tell() < _get_io_length(f):
             code = GeckoCommand.bytes_to_geckocommand(f)
             if code.get_endifs() <= 0:
                 self.add_child(code)
@@ -3756,7 +3815,7 @@ class GeckoIfGreaterThan16(GeckoCommand):
         return 1 if self._endif else 0
 
     def populate_from_bytes(self, f: BytesIO) -> "GeckoCommand":
-        while f.tell() < len(f.getvalue()):
+        while f.tell() < _get_io_length(f):
             code = GeckoCommand.bytes_to_geckocommand(f)
             if code.get_endifs() <= 0:
                 self.add_child(code)
@@ -3849,7 +3908,7 @@ class GeckoIfLesserThan16(GeckoCommand):
         return 1 if self._endif else 0
 
     def populate_from_bytes(self, f: BytesIO) -> "GeckoCommand":
-        while f.tell() < len(f.getvalue()):
+        while f.tell() < _get_io_length(f):
             code = GeckoCommand.bytes_to_geckocommand(f)
             if code.get_endifs() <= 0:
                 self.add_child(code)
@@ -3939,7 +3998,7 @@ class CounterIfEqual16(GeckoCommand):
         return 1 if (self._flags & 0x1) != 0 else 0
 
     def populate_from_bytes(self, f: BytesIO) -> "GeckoCommand":
-        while f.tell() < len(f.getvalue()):
+        while f.tell() < _get_io_length(f):
             code = GeckoCommand.bytes_to_geckocommand(f)
             if code.get_endifs() <= 0:
                 self.add_child(code)
@@ -4027,7 +4086,7 @@ class CounterIfNotEqual16(GeckoCommand):
         return 1 if (self._flags & 0x1) != 0 else 0
 
     def populate_from_bytes(self, f: BytesIO) -> "GeckoCommand":
-        while f.tell() < len(f.getvalue()):
+        while f.tell() < _get_io_length(f):
             code = GeckoCommand.bytes_to_geckocommand(f)
             if code.get_endifs() <= 0:
                 self.add_child(code)
@@ -4115,7 +4174,7 @@ class CounterIfGreaterThan16(GeckoCommand):
         return 1 if (self._flags & 0x1) != 0 else 0
 
     def populate_from_bytes(self, f: BytesIO) -> "GeckoCommand":
-        while f.tell() < len(f.getvalue()):
+        while f.tell() < _get_io_length(f):
             code = GeckoCommand.bytes_to_geckocommand(f)
             if code.get_endifs() <= 0:
                 self.add_child(code)
@@ -4203,7 +4262,7 @@ class CounterIfLesserThan16(GeckoCommand):
         return 1 if (self._flags & 0x1) != 0 else 0
 
     def populate_from_bytes(self, f: BytesIO) -> "GeckoCommand":
-        while f.tell() < len(f.getvalue()):
+        while f.tell() < _get_io_length(f):
             code = GeckoCommand.bytes_to_geckocommand(f)
             if code.get_endifs() <= 0:
                 self.add_child(code)
@@ -4315,7 +4374,66 @@ class AsmInsert(GeckoCommand):
     def as_bytes(self) -> bytes:
         intType = GeckoCommand.type_to_int(self.codetype) | (
             0x10 if self._isPointer else 0)
-        metadata = (intType << 24) | (self._address & 0x1FFFFFC) | (1 if self._isLink else 0)
+        metadata = (intType << 24) | (self._address &
+                                      0x1FFFFFC) | (1 if self._isLink else 0)
+        info = self.virtual_length() - 1
+        return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False) + _align_bytes(self.value, alignment=8)
+
+
+class AsmInsertLink(GeckoCommand):
+    def __init__(self, value: bytes, address: int = 0, isPointer: bool = False):
+        self.value = value
+        self._address = address & 0x1FFFFFF
+        self._isPointer = isPointer
+
+    def __len__(self) -> int:
+        return 8 + len(self.value)
+
+    def __str__(self) -> str:
+        intType = GeckoCommand.type_to_int(self.codetype) | (
+            0x10 if self._isPointer else 0)
+        addrstr = "pointer address" if self._isPointer else "base address"
+        btype = "(bl / NaN)" if self._isLink else "(b / b)"
+        return f"({intType:02X}) Inject {btype} the designated ASM at 0x{self._address:08X} + the {addrstr}"
+
+    def __getitem__(self, index: int) -> bytes:
+        return self.value[index]
+
+    def __setitem__(self, index: int, value: bytes):
+        if isinstance(value, GeckoCommand):
+            raise InvalidGeckoCommandError(
+                f"Cannot assign {value.__class__.__name__} to the data of {self.__class__.__name__}")
+        self.value[index] = value
+
+    @classproperty
+    def codetype(cls) -> GeckoCommand.Type:
+        return GeckoCommand.Type.ASM_INSERT_LINK
+
+    @property
+    def value(self) -> bytes:
+        length = len(self._value)
+        if length % 8 != 0 and length != 0:
+            return self._value + b"\x60\x00\x00\x00"
+        return self._value
+
+    @value.setter
+    def value(self, value: bytes):
+        self._value = value
+
+    def virtual_length(self) -> int:
+        return ((len(self) + 7) & -0x8) >> 3
+
+    def is_ba_type(self) -> bool:
+        return not self._isPointer
+
+    def is_po_type(self) -> bool:
+        return self._isPointer
+
+    def as_bytes(self) -> bytes:
+        intType = GeckoCommand.type_to_int(self.codetype) | (
+            0x10 if self._isPointer else 0)
+        metadata = (intType << 24) | (self._address &
+                                      0x1FFFFFC) | (1 if self._isLink else 0)
         info = self.virtual_length() - 1
         return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False) + _align_bytes(self.value, alignment=8)
 
@@ -4387,7 +4505,8 @@ class WriteBranch(GeckoCommand):
     def as_bytes(self) -> bytes:
         intType = GeckoCommand.type_to_int(self.codetype) | (
             0x10 if self._isPointer else 0)
-        metadata = (intType << 24) | (self._address & 0x1FFFFFC) | (1 if self._isLink else 0)
+        metadata = (intType << 24) | (self._address &
+                                      0x1FFFFFC) | (1 if self._isLink else 0)
         info = self.value
         return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False)
 
@@ -4682,7 +4801,8 @@ class AsmInsertXOR(GeckoCommand):
     def as_bytes(self) -> bytes:
         intType = GeckoCommand.type_to_int(self.codetype) + (
             2 if self._isPointer else 0)
-        metadata = (intType << 24) | (self._address & 0x1FFFFFC) | (1 if self._isLink else 0)
+        metadata = (intType << 24) | (self._address &
+                                      0x1FFFFFC) | (1 if self._isLink else 0)
         info = (self._xorCount << 24) | (
             self._mask << 8) | self.virtual_length()
         return metadata.to_bytes(4, "big", signed=False) + info.to_bytes(4, "big", signed=False) + _align_bytes(self.value, alignment=8)
@@ -4749,7 +4869,7 @@ class BrainslugSearch(GeckoCommand):
         return len(self.children) + 1
 
     def populate_from_bytes(self, f: BytesIO) -> "GeckoCommand":
-        while f.tell() < len(f.getvalue()):
+        while f.tell() < _get_io_length(f):
             code = GeckoCommand.bytes_to_geckocommand(f)
             if code.get_endifs() <= 0:
                 self.add_child(code)
@@ -4878,7 +4998,7 @@ class GeckoCode(object):
 
     @classmethod
     def from_bytes(cls, f: Union[BinaryIO, bytes], name: Optional[str] = None, author: Optional[str] = None, desc: Optional[str] = None, enabled: bool = True, preapplicable: bool = True) -> "GeckoCode":
-        if not isinstance(f, BytesIO):
+        if not isinstance(f, BufferedIOBase):
             f = BytesIO(f)
 
         code = cls(f"GeckoCode {GeckoCode._TmpNameCounter}" if name is None else name,
@@ -4888,7 +5008,7 @@ class GeckoCode(object):
                    preapplicable=preapplicable)
         GeckoCode._TmpNameCounter += 1
 
-        while f.tell() < len(f.getvalue()):
+        while f.tell() < _get_io_length(f):
             command = GeckoCommand.bytes_to_geckocommand(f)
             if command.codetype == GeckoCommand.Type.EXIT:
                 break
@@ -4908,7 +5028,7 @@ class GeckoCode(object):
                    preapplicable=preapplicable)
         GeckoCode._TmpNameCounter += 1
 
-        while f.tell() < len(f.getvalue()):
+        while f.tell() < _get_io_length(f):
             command = GeckoCommand.str_to_geckocommand(f)
             code.add_child(command)
             if command.codetype == GeckoCommand.Type.EXIT:
