@@ -252,6 +252,8 @@ class GeckoCommand():
         def add_children_till_terminator(code: "GeckoCommand", f: BytesIO):
             while f.tell() < _get_io_length(f):
                 child = GeckoCommand.bytes_to_geckocommand(f)
+                if child is None:
+                    raise InvalidGeckoCommandError("Data passed to bytes parser did not resolve to a command!")
                 if child.codetype in {GeckoCommand.Type.TERMINATOR, GeckoCommand.Type.EXIT}:
                     f.seek(-8, 1)
                     return
@@ -574,6 +576,10 @@ class GeckoCommand():
             info = f.read(4)
             size = int.from_bytes(info, "big", signed=False)
             return AsmInsert(f.read(size << 3), address, isPointerType, isLink=(address & 1) != 0)
+        elif codetype == GeckoCommand.Type.ASM_INSERT_LINK:
+            info = f.read(4)
+            size = int.from_bytes(info, "big", signed=False)
+            return AsmInsert(f.read(size << 3), address, isPointerType)
         elif codetype == GeckoCommand.Type.WRITE_BRANCH:
             info = f.read(4)
             dest = int.from_bytes(info, "big", signed=False)
@@ -622,6 +628,8 @@ class GeckoCommand():
         def add_children_till_terminator(code: "GeckoCommand", f: StringIO):
             while f.tell() < _get_io_length(f):
                 child = GeckoCommand.str_to_geckocommand(f)
+                if child is None:
+                    raise InvalidGeckoCommandError("Data passed to text parser did not resolve to a command!")
                 if child.codetype in {GeckoCommand.Type.TERMINATOR, GeckoCommand.Type.EXIT}:
                     f.seek(f.tell() - 17)
                     return
@@ -958,6 +966,13 @@ class GeckoCommand():
             for _ in range(size):
                 data += bytes.fromhex("".join(f.readline().strip().split()))
             return AsmInsert(data, address, isPointerType, isLink=(address & 1) != 0)
+        elif codetype == GeckoCommand.Type.ASM_INSERT_LINK:
+            info = bytes.fromhex(line[-8:])
+            size = int.from_bytes(info, "big", signed=False)
+            data = b""
+            for _ in range(size):
+                data += bytes.fromhex("".join(f.readline().strip().split()))
+            return AsmInsertLink(data, address, isPointerType)
         elif codetype == GeckoCommand.Type.WRITE_BRANCH:
             info = bytes.fromhex(line[-8:])
             dest = int.from_bytes(info, "big", signed=False)
