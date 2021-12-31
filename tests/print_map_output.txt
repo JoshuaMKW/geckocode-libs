@@ -1,0 +1,66 @@
+(04) Write word 0x4182000C to 0x001E68D4 + the base address
+(C2) Inject (b / b) the designated ASM at 0x001E68D0 + the base address
+(C2) Inject (b / b) the designated ASM at 0x002320E0 + the base address
+(04) Write word 0x41200000 to 0x003DB210 + the base address
+(E0) Clear the code execution status. Set the base address to 80000000. Set the pointer address to 80000000.
+(28) If the short at address (0x00404454 + the base address) & ~0x0000 is equal to 0x00000200:
+  (48) Set the pointer address to the value at address [0x0040E12C]
+  (12) Write short 0x4200 to 0x00000000 + the pointer address
+(E0) Clear the code execution status. Set the base address to 80000000. Set the pointer address to 80000000.
+(2A) If the short at address (0x00404454 + the base address) & ~0x0000 is not equal to 0x00000200:
+  (48) Set the pointer address to the value at address [0x0040E12C]
+  (12) Write short 0x3F80 to 0x00000000 + the pointer address
+  (48) Set the pointer address to the value at address [0x0040E12C]
+  (12) Write short 0x3E00 to 0x00000000 + the pointer address
+  (28) If the short at address (0x00404454 + the base address) & ~0x0000 is equal to 0x00000100:
+    (48) Set the pointer address to the value at address [0x0040E12C]
+    (12) Write short 0x41FE to 0x00000000 + the pointer address
+(E0) Clear the code execution status. Set the base address to 80000000. Set the pointer address to 80000000.
+(2E) If the short at address (0x00404454 + the base address) & ~0x0000 is lesser than 0x00000100:
+  (48) Set the pointer address to the value at address [0x0040E12C]
+  (12) Write short 0x0000 to 0x00000000 + the pointer address
+  (04) Write word 0x3CE08041 to 0x00002F10 + the base address
+  (04) Write word 0x80C7E12C to 0x00002F14 + the base address
+  (04) Write word 0x3CE08000 to 0x00002F18 + the base address
+  (04) Write word 0x7C063800 to 0x00002F1C + the base address
+  (04) Write word 0x4081004C to 0x00002F20 + the base address
+  (04) Write word 0x3CE08180 to 0x00002F24 + the base address
+  (04) Write word 0x7C063800 to 0x00002F28 + the base address
+  (04) Write word 0x40800040 to 0x00002F2C + the base address
+  (04) Write word 0x3CE08000 to 0x00002F30 + the base address
+  (04) Write word 0xC2C72F70 to 0x00002F34 + the base address
+  (04) Write word 0xC2A6FEF8 to 0x00002F38 + the base address
+  (04) Write word 0x60000000 to 0x00002F3C + the base address
+  (04) Write word 0xD2A6FEF8 to 0x00002F40 + the base address
+  (04) Write word 0xC2A6FF00 to 0x00002F44 + the base address
+  (04) Write word 0x60000000 to 0x00002F48 + the base address
+  (04) Write word 0xD2A6FF00 to 0x00002F4C + the base address
+  (04) Write word 0xC2A6FEFC to 0x00002F50 + the base address
+  (04) Write word 0x60000000 to 0x00002F54 + the base address
+  (04) Write word 0xD2A6FEFC to 0x00002F58 + the base address
+  (04) Write word 0xC2A72F74 to 0x00002F5C + the base address
+  (04) Write word 0xC2C72F74 to 0x00002F60 + the base address
+  (04) Write word 0x38C00000 to 0x00002F64 + the base address
+  (04) Write word 0x38E00000 to 0x00002F68 + the base address
+  (04) Write word 0x4E800020 to 0x00002F6C + the base address
+  (04) Write word 0x42480000 to 0x00002F70 + the base address
+  (04) Write word 0x00000000 to 0x00002F74 + the base address
+  (04) Write word 0x4BD39B44 to 0x002C93CC + the base address
+  (28) If the short at address (0x00404454 + the base address) & ~0x0000 is equal to 0x00000002:
+    (04) Write word 0xEEB5B02A to 0x00002F3C + the base address
+    (28) If the short at address (0x00404454 + the base address) & ~0x0000 is equal to 0x00000001:
+      (04) Write word 0xEEB5B028 to 0x00002F3C + the base address
+      (28) If the short at address (0x00404454 + the base address) & ~0x0000 is equal to 0x00000004:
+        (04) Write word 0xEEB5B02A to 0x00002F48 + the base address
+        (28) If the short at address (0x00404454 + the base address) & ~0x0000 is equal to 0x00000008:
+          (04) Write word 0xEEB5B028 to 0x00002F48 + the base address
+          (28) If the short at address (0x00404454 + the base address) & ~0x0000 is equal to 0x00000048:
+            (04) Write word 0xEEB5B02A to 0x00002F54 + the base address
+            (28) If the short at address (0x00404454 + the base address) & ~0x0000 is equal to 0x00000044:
+              (04) Write word 0xEEB5B028 to 0x00002F54 + the base address
+              (04) Write word 0xFFFFFFFF to 0x00578988 + the base address
+              (04) Write word 0xFFFFFFFF to 0x0057898C + the base address
+              (04) Write word 0xFFFFFFFF to 0x00578990 + the base address
+              (02) Write short 0xFFFF to 0x00578994 + the base address
+              (00) Write byte 0xFF to 0x00578996 + the base address
+(F0) Flag the end of the codelist, the codehandler exits
