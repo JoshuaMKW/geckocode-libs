@@ -4369,8 +4369,8 @@ class AsmInsert(GeckoCommand):
     @property
     def value(self) -> bytes:
         length = len(self._value)
-        if length % 8 != 0 and length != 0:
-            return self._value + b"\x60\x00\x00\x00"
+        if ((length-1) % 8) > 3 and length != 0:
+            return _align_bytes(self._value, alignment=4) + b"\x60\x00\x00\x00"
         return self._value
 
     @value.setter
@@ -4378,7 +4378,7 @@ class AsmInsert(GeckoCommand):
         self._value = value
 
     def virtual_length(self) -> int:
-        return ((len(self) + 7) & -0x8) >> 3
+        return ((len(self) + 11) & -0x8) >> 3
 
     def is_ba_type(self) -> bool:
         return not self._isPointer
@@ -4427,8 +4427,8 @@ class AsmInsertLink(GeckoCommand):
     @property
     def value(self) -> bytes:
         length = len(self._value)
-        if length % 8 != 0 and length != 0:
-            return self._value + b"\x60\x00\x00\x00"
+        if ((length-1) % 8) > 3 and length != 0:
+            return _align_bytes(self._value, alignment=4) + b"\x60\x00\x00\x00"
         return self._value
 
     @value.setter
@@ -4436,7 +4436,7 @@ class AsmInsertLink(GeckoCommand):
         self._value = value
 
     def virtual_length(self) -> int:
-        return ((len(self) + 7) & -0x8) >> 3
+        return ((len(self) + 11) & -0x8) >> 3
 
     def is_ba_type(self) -> bool:
         return not self._isPointer
